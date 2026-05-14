@@ -144,6 +144,7 @@ class TopLocation(BaseModel):
 class OverviewResponse(BaseModel):
     active_jobs_count: int
     ev_jobs_count: int
+    posted_this_week: int
     new_jobs_since_last_run: int
     archived_jobs_count: int
     missing_jobs_count: int

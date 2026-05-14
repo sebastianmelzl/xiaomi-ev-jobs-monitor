@@ -906,6 +906,21 @@ a { color: inherit; text-decoration: none; }
 }
 .hidden-job-row:last-child { border-bottom: none; }
 
+.recent-job-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.recent-job-row:last-child { border-bottom: none; }
+.recent-job-row:hover { background: var(--bg-hover); }
+
+.chart-card--wide {
+  grid-column: 1 / -1;
+}
+
 /* ── Live scrape panel ───────────────────────────────────────────────────── */
 .slp {
   position: fixed;

@@ -36,5 +36,6 @@ const API = {
   chartsArchivedOverTime: (days = 90) => apiFetch(`/charts/archived-over-time?days=${days}`),
   chartsTopGrowth: () => apiFetch('/charts/top-applicant-growth'),
   chartsScoreDistribution: () => apiFetch('/charts/ev-score-distribution'),
+  chartsJobsByDepartment: () => apiFetch('/charts/jobs-by-department'),
   exportEVJobs: () => window.open('/api/export/ev-jobs.csv', '_blank'),
 };

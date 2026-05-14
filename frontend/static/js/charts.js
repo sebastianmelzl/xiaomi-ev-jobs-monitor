@@ -172,6 +172,32 @@ function renderApplicantTimeline(el, history) {
   });
 }
 
+function renderJobsByDepartment(el, departments) {
+  const t = getChartTheme();
+  const names = departments.map(d => d.department);
+  const counts = departments.map(d => d.count);
+
+  return makeChart(el, {
+    grid: { top: 10, right: 40, bottom: 10, left: 160 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: t.tooltip.bg,
+      borderColor: t.tooltip.border,
+      borderWidth: 1,
+      textStyle: { color: t.labelColor, fontSize: 12 },
+    },
+    xAxis: { ...baseAxisOption(), type: 'value', minInterval: 1 },
+    yAxis: { ...baseAxisOption(), type: 'category', data: names, inverse: true, axisLabel: { fontSize: 11, width: 150, overflow: 'truncate' } },
+    series: [{
+      type: 'bar',
+      data: counts,
+      itemStyle: { color: '#6366f1', borderRadius: [0, 3, 3, 0] },
+      barMaxWidth: 24,
+      label: { show: true, position: 'right', color: t.textColor, fontSize: 11 },
+    }],
+  });
+}
+
 function renderScoreDistribution(el, dist) {
   const t = getChartTheme();
   const labels = dist.map(d => d.range);

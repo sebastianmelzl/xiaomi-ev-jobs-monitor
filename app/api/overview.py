@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, desc, not_
-from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models import Job, JobEVClassification, HiddenJob, ScrapeRun, JobStatus, EVLabel, RunStatus
@@ -13,13 +12,9 @@ router = APIRouter()
 
 @router.get("/overview", response_model=OverviewResponse)
 def get_overview(db: Session = Depends(get_db)):
-    # Active jobs
-    active_count = db.execute(
-        select(func.count()).where(Job.status == JobStatus.active)
-    ).scalar_one()
-
-    # EV-relevant jobs (core + likely + maybe), active only
     hidden_ids = select(HiddenJob.job_id).scalar_subquery()
+
+    # Active core EV jobs (not hidden)
     ev_count = db.execute(
         select(func.count())
         .select_from(Job)
@@ -31,14 +26,32 @@ def get_overview(db: Session = Depends(get_db)):
         )
     ).scalar_one()
 
-    # Archived count
-    archived_count = db.execute(
-        select(func.count()).where(Job.status == JobStatus.archived)
+    # All active jobs count
+    active_count = db.execute(
+        select(func.count()).where(Job.status == JobStatus.active)
     ).scalar_one()
 
-    # Missing count
+    # Jobs posted in last 7 days (by LinkedIn posted date)
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    posted_this_week = db.execute(
+        select(func.count())
+        .select_from(Job)
+        .join(JobEVClassification, Job.id == JobEVClassification.job_id)
+        .where(
+            Job.status == JobStatus.active,
+            JobEVClassification.ev_label == EVLabel.core_ev,
+            Job.posted_date_normalized >= week_ago,
+            Job.posted_date_normalized.isnot(None),
+            not_(Job.id.in_(hidden_ids)),
+        )
+    ).scalar_one()
+
+    # Missing / archived
     missing_count = db.execute(
         select(func.count()).where(Job.status == JobStatus.missing)
+    ).scalar_one()
+    archived_count = db.execute(
+        select(func.count()).where(Job.status == JobStatus.archived)
     ).scalar_one()
 
     # Last successful scrape run
@@ -53,29 +66,19 @@ def get_overview(db: Session = Depends(get_db)):
     new_since_last = 0
     if last_run and last_run.started_at:
         new_since_last = db.execute(
-            select(func.count()).where(Job.first_seen_at >= last_run.started_at)
+            select(func.count())
+            .select_from(Job)
+            .join(JobEVClassification, Job.id == JobEVClassification.job_id)
+            .where(
+                Job.first_seen_at >= last_run.started_at,
+                JobEVClassification.ev_label == EVLabel.core_ev,
+            )
         ).scalar_one()
 
-    # EV label breakdown
-    breakdown_rows = db.execute(
-        select(JobEVClassification.ev_label, func.count())
-        .join(Job, Job.id == JobEVClassification.job_id)
-        .where(Job.status == JobStatus.active)
-        .group_by(JobEVClassification.ev_label)
-    ).all()
+    # EV label breakdown (kept for schema compat, not shown in new UI)
+    breakdown = EVLabelBreakdown(core_ev=ev_count)
 
-    breakdown = EVLabelBreakdown()
-    for label, count in breakdown_rows:
-        if label == EVLabel.core_ev:
-            breakdown.core_ev = count
-        elif label == EVLabel.likely_ev:
-            breakdown.likely_ev = count
-        elif label == EVLabel.maybe_ev:
-            pass  # not shown
-        elif label == EVLabel.non_ev:
-            breakdown.non_ev = count
-
-    # Top locations (active jobs with EV relevance)
+    # Top locations (core EV, active, not hidden)
     location_rows = db.execute(
         select(Job.location, func.count().label("cnt"))
         .join(JobEVClassification, Job.id == JobEVClassification.job_id)
@@ -83,10 +86,11 @@ def get_overview(db: Session = Depends(get_db)):
             Job.status == JobStatus.active,
             Job.location.isnot(None),
             JobEVClassification.ev_label == EVLabel.core_ev,
+            not_(Job.id.in_(hidden_ids)),
         )
         .group_by(Job.location)
         .order_by(desc("cnt"))
-        .limit(10)
+        .limit(8)
     ).all()
 
     top_locations = [TopLocation(location=loc, count=cnt) for loc, cnt in location_rows]
@@ -94,6 +98,7 @@ def get_overview(db: Session = Depends(get_db)):
     return OverviewResponse(
         active_jobs_count=active_count,
         ev_jobs_count=ev_count,
+        posted_this_week=posted_this_week,
         new_jobs_since_last_run=new_since_last,
         archived_jobs_count=archived_count,
         missing_jobs_count=missing_count,
