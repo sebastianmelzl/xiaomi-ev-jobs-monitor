@@ -1,7 +1,6 @@
 /* Overview page */
 async function renderOverview() {
   setPageTitle('Overview', 'Xiaomi EV Jobs Dashboard');
-
   const content = document.getElementById('content');
   content.innerHTML = loadingHtml();
 
@@ -12,39 +11,75 @@ async function renderOverview() {
       API.chartsJobsByDepartment(),
     ]);
 
-    const lastUpdate = overview.last_scrape_at
-      ? formatRelTime(overview.last_scrape_at)
-      : 'Never';
+    const lastUpdate = overview.last_scrape_at ? formatRelTime(overview.last_scrape_at) : 'Never';
+    const scrapeStatus = overview.last_scrape_status || null;
 
     content.innerHTML = `
-      <div class="kpi-grid">
-        ${kpiCard('Active EV Jobs', overview.ev_jobs_count, 'accent', `as of ${lastUpdate}`)}
-        ${kpiCard('Posted this week', overview.posted_this_week, overview.posted_this_week > 0 ? 'accent' : '', 'by LinkedIn posted date')}
-        ${kpiCard('Missing', overview.missing_jobs_count, overview.missing_jobs_count > 0 ? 'yellow' : '', 'not seen recently')}
-        ${kpiCard('Last Scrape', '', '', formatStatusBadge(overview.last_scrape_status, lastUpdate), true)}
+      <!-- KPI row -->
+      <div class="ov-stats">
+        <div class="ov-stat">
+          <div class="ov-stat-label">Active EV Jobs</div>
+          <div class="ov-stat-value is-accent">${overview.ev_jobs_count}</div>
+          <div class="ov-stat-sub">as of ${lastUpdate}</div>
+        </div>
+        <div class="ov-stat">
+          <div class="ov-stat-label">Posted this Week</div>
+          <div class="ov-stat-value ${overview.posted_this_week > 0 ? 'is-green' : ''}">${overview.posted_this_week}</div>
+          <div class="ov-stat-sub">by LinkedIn posted date</div>
+        </div>
+        <div class="ov-stat">
+          <div class="ov-stat-label">Missing</div>
+          <div class="ov-stat-value ${overview.missing_jobs_count > 0 ? 'is-yellow' : ''}">${overview.missing_jobs_count}</div>
+          <div class="ov-stat-sub">not seen in last scrape</div>
+        </div>
+        <div class="ov-stat ov-stat--last">
+          <div class="ov-stat-label">Last Scrape</div>
+          ${scrapeStatus
+            ? `<div class="ov-stat-badge"><span class="badge badge-${scrapeStatus}">${scrapeStatus}</span></div>`
+            : `<div class="ov-stat-value">–</div>`}
+          <div class="ov-stat-sub">${lastUpdate}</div>
+        </div>
       </div>
 
-      <div class="chart-grid">
-        <div class="chart-card">
-          <div class="chart-title">EV Jobs posted per Week <span style="font-size:11px;color:var(--text-muted)">(last 90 days · by posted date)</span></div>
-          <div class="chart-container" id="chartWeekly" style="height:200px"></div>
+      <!-- Charts: weekly + locations side by side -->
+      <div class="ov-charts-row">
+        <div class="ov-card">
+          <div class="ov-card-head">
+            <span class="ov-card-title">EV Jobs per Week</span>
+            <span class="ov-card-hint">last 90 days · by posted date</span>
+          </div>
+          <div class="ov-card-body">
+            <div id="chartWeekly" class="ov-chart-area"></div>
+          </div>
         </div>
-        <div class="chart-card">
-          <div class="chart-title">Top Locations</div>
-          <div class="chart-container" id="chartLocations" style="height:200px"></div>
-        </div>
-        <div class="chart-card chart-card--wide">
-          <div class="chart-title">Jobs by Department</div>
-          <div class="chart-container" id="chartDepts" style="height:260px"></div>
+        <div class="ov-card">
+          <div class="ov-card-head">
+            <span class="ov-card-title">Top Locations</span>
+          </div>
+          <div class="ov-card-body">
+            <div id="chartLocations" class="ov-chart-area"></div>
+          </div>
         </div>
       </div>
 
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">Recently Posted</span>
+      <!-- Department chart: full width -->
+      <div class="ov-card ov-card--mb">
+        <div class="ov-card-head">
+          <span class="ov-card-title">Jobs by Department</span>
+          <span class="ov-card-hint">active core EV jobs</span>
+        </div>
+        <div class="ov-card-body">
+          <div id="chartDepts" class="ov-chart-area ov-chart-area--dept"></div>
+        </div>
+      </div>
+
+      <!-- Recently posted -->
+      <div class="ov-card">
+        <div class="ov-card-head">
+          <span class="ov-card-title">Recently Posted</span>
           <a href="#/jobs" class="btn btn-ghost btn-sm">View all →</a>
         </div>
-        <div id="recentJobsList">${loadingHtml()}</div>
+        <div id="recentJobsList"><div class="ov-card-body">${loadingHtml()}</div></div>
       </div>
     `;
 
@@ -56,62 +91,62 @@ async function renderOverview() {
     }
 
     // Weekly chart
+    const weeklyEl = document.getElementById('chartWeekly');
     if (evTime.length > 0) {
-      renderEVOverTime(document.getElementById('chartWeekly'), evTime);
+      renderEVOverTime(weeklyEl, evTime);
     } else {
-      document.getElementById('chartWeekly').innerHTML = emptyChartHtml('No posted-date data yet — run a scrape');
+      weeklyEl.innerHTML = ovEmptyChart('No data yet — run a scrape');
     }
 
-    // Top locations
+    // Locations chart
+    const locEl = document.getElementById('chartLocations');
     if (overview.top_locations.length > 0) {
-      renderTopLocations(document.getElementById('chartLocations'), overview.top_locations);
+      renderTopLocations(locEl, overview.top_locations);
     } else {
-      document.getElementById('chartLocations').innerHTML = emptyChartHtml('No location data yet');
+      locEl.innerHTML = ovEmptyChart('No location data yet');
     }
 
     // Department chart
+    const deptEl = document.getElementById('chartDepts');
     if (deptData.length > 0) {
-      renderJobsByDepartment(document.getElementById('chartDepts'), deptData);
+      renderJobsByDepartment(deptEl, deptData);
     } else {
-      document.getElementById('chartDepts').innerHTML = emptyChartHtml('No department data yet');
+      deptEl.innerHTML = ovEmptyChart('No department data yet');
     }
 
-    // Recently posted jobs (last 8 by posted date)
+    // Recently posted
     try {
       const recent = await API.jobs({
-        ev_only: 'true',
-        status: 'active',
-        sort_by: 'posted_date_normalized',
-        sort_dir: 'desc',
-        page: 1,
-        page_size: 8,
+        ev_only: 'true', status: 'active',
+        sort_by: 'posted_date_normalized', sort_dir: 'desc',
+        page: 1, page_size: 8,
       });
       const el = document.getElementById('recentJobsList');
       if (!el) return;
+
       if (recent.items.length === 0) {
-        el.innerHTML = '<div class="section-body"><p class="text-muted">No jobs yet — run a scrape.</p></div>';
+        el.innerHTML = '<div class="ov-card-body"><p class="text-muted">No jobs yet — run a scrape.</p></div>';
         return;
       }
-      el.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:0">
-          ${recent.items.map(j => `
-            <div class="recent-job-row" onclick="openJobModal(${j.id})" style="cursor:pointer">
-              <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(j.title || '–')}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
-                  ${escHtml(j.department || '')}${j.department && j.location ? ' · ' : ''}${escHtml(j.location || '')}
-                </div>
-              </div>
-              <div style="flex-shrink:0;text-align:right;font-size:12px;color:var(--text-muted)">
-                ${j.posted_date_normalized ? formatDate(j.posted_date_normalized) : escHtml(j.posted_text_raw || '–')}
-              </div>
+
+      el.innerHTML = recent.items.map(j => `
+        <div class="ov-recent-row" onclick="openJobModal(${j.id})">
+          <div class="score-bar ov-recent-score">
+            <div class="score-track">
+              <div class="score-fill ${(j.ev_score ?? 0) >= 60 ? 'high' : 'mid'}" style="width:${j.ev_score ?? 0}%"></div>
             </div>
-          `).join('')}
+            <span class="score-num">${j.ev_score ?? 0}</span>
+          </div>
+          <div class="ov-recent-info">
+            <div class="ov-recent-title">${escHtml(j.title || '–')}</div>
+            <div class="ov-recent-meta">${[j.department, j.location].filter(Boolean).map(escHtml).join(' · ')}</div>
+          </div>
+          <div class="ov-recent-date">${j.posted_date_normalized ? formatDate(j.posted_date_normalized) : escHtml(j.posted_text_raw || '–')}</div>
         </div>
-      `;
+      `).join('');
     } catch (_) {
       const el = document.getElementById('recentJobsList');
-      if (el) el.innerHTML = '<div class="section-body"><p class="text-muted">Could not load recent jobs.</p></div>';
+      if (el) el.innerHTML = '<div class="ov-card-body"><p class="text-muted">Could not load recent jobs.</p></div>';
     }
 
   } catch (err) {
@@ -119,23 +154,6 @@ async function renderOverview() {
   }
 }
 
-function kpiCard(label, value, colorClass, sub, rawValue = false) {
-  const displayValue = rawValue ? sub : value;
-  return `
-    <div class="kpi-card">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value ${colorClass}">${displayValue}</div>
-      ${!rawValue ? `<div class="kpi-sub">${sub}</div>` : ''}
-    </div>
-  `;
-}
-
-function formatStatusBadge(status, time) {
-  if (!status) return '<span class="text-muted">–</span>';
-  const cls = { success: 'success', partial: 'partial', failed: 'failed', running: 'running' }[status] || '';
-  return `<span class="badge badge-${cls}">${status}</span><br/><span style="font-size:11px;color:var(--text-muted)">${time}</span>`;
-}
-
-function emptyChartHtml(msg) {
-  return `<div class="empty-state" style="height:160px;"><p class="text-muted">${msg}</p></div>`;
+function ovEmptyChart(msg) {
+  return `<div class="ov-empty-chart"><span class="text-muted">${msg}</span></div>`;
 }
