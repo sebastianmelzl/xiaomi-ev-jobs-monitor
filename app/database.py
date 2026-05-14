@@ -39,7 +39,27 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     from app.models import Base
     Base.metadata.create_all(bind=engine)
+    _normalize_locations()
     _dedup_jobs()
+
+
+def _normalize_locations() -> None:
+    """Retroactively normalize all location strings already in the database."""
+    from app.models import Job
+    from app.scraper.normalizer import normalize_location
+    from loguru import logger
+    from sqlalchemy import select
+    with SessionLocal() as db:
+        jobs = db.execute(select(Job).where(Job.location.isnot(None))).scalars().all()
+        updated = 0
+        for job in jobs:
+            normalized = normalize_location(job.location)
+            if normalized and normalized != job.location:
+                job.location = normalized
+                updated += 1
+        if updated:
+            db.commit()
+            logger.info(f"Location normalization: updated {updated} job(s)")
 
 
 def _dedup_jobs() -> None:

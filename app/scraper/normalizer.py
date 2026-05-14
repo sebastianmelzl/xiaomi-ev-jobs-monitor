@@ -95,6 +95,62 @@ def _normalize_str(s: Optional[str]) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
 
 
+# ── Location normalization ────────────────────────────────────────────────────
+
+_LOCATION_OVERRIDES: dict[str, str] = {
+    "greater bay area": "Greater Bay Area",
+    "hong kong sar": "Hong Kong",
+    "hong kong, hong kong sar": "Hong Kong",
+    "hong kong s.a.r.": "Hong Kong",
+    "macau sar": "Macau",
+    "taiwan": "Taiwan",
+}
+
+_RE_GREATER = re.compile(r"^Greater\s+", re.IGNORECASE)
+_RE_METRO = re.compile(r"\s+Metropolitan\s+Area\s*$", re.IGNORECASE)
+_RE_AREA = re.compile(r"\s+Area\s*$", re.IGNORECASE)
+
+
+def normalize_location(location: Optional[str]) -> Optional[str]:
+    """
+    Reduce verbose LinkedIn location strings to a clean city name.
+
+    Examples:
+      "Greater Munich Metropolitan Area"  → "Munich"
+      "Munich, Bavaria, Germany"          → "Munich"
+      "Greater London Area"               → "London"
+      "Singapore, Singapore"              → "Singapore"
+      "Hong Kong SAR"                     → "Hong Kong"
+      "Greater Bay Area"                  → "Greater Bay Area"  (kept — ambiguous region)
+    """
+    if not location:
+        return location
+
+    loc = location.strip()
+    lower = loc.lower()
+
+    # Manual overrides for ambiguous / special-case strings
+    if lower in _LOCATION_OVERRIDES:
+        return _LOCATION_OVERRIDES[lower]
+
+    # Strip "Greater " prefix
+    loc = _RE_GREATER.sub("", loc)
+
+    # Strip " Metropolitan Area" suffix
+    loc = _RE_METRO.sub("", loc).strip()
+
+    # Strip " Area" suffix (only when something remains)
+    stripped = _RE_AREA.sub("", loc).strip()
+    if stripped:
+        loc = stripped
+
+    # Take first segment before comma (e.g. "Munich, Bavaria, Germany" → "Munich")
+    if "," in loc:
+        loc = loc.split(",")[0].strip()
+
+    return loc or location.strip()
+
+
 # ── Posted date normalization ─────────────────────────────────────────────────
 
 _RELATIVE_PATTERNS = [

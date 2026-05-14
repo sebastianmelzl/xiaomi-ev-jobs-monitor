@@ -14,7 +14,7 @@ from loguru import logger
 
 from app.scraper.normalizer import (
     canonicalize_linkedin_url, make_canonical_job_key,
-    parse_posted_date, parse_applicant_count,
+    parse_posted_date, parse_applicant_count, normalize_location,
 )
 
 SCRAPER_MIN_DELAY = float(os.getenv("SCRAPER_MIN_DELAY_S", "1.2"))
@@ -200,7 +200,7 @@ class LinkedInScraper:
                     continue
 
                 company_name = (company_el.get_text(strip=True) if company_el else "") or company
-                location = location_el.get_text(strip=True) if location_el else ""
+                location = normalize_location(location_el.get_text(strip=True) if location_el else "") or ""
                 posted_raw = ""
                 if time_el:
                     posted_raw = time_el.get("datetime", "") or time_el.get_text(strip=True)
