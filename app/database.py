@@ -39,3 +39,23 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     from app.models import Base
     Base.metadata.create_all(bind=engine)
+    _dedup_jobs()
+
+
+def _dedup_jobs() -> None:
+    """Remove duplicate jobs that share the same linkedin_job_id (keep lowest id)."""
+    from sqlalchemy import text
+    with SessionLocal() as db:
+        result = db.execute(text("""
+            DELETE FROM jobs
+            WHERE linkedin_job_id IS NOT NULL
+              AND id NOT IN (
+                  SELECT MIN(id) FROM jobs
+                  WHERE linkedin_job_id IS NOT NULL
+                  GROUP BY linkedin_job_id
+              )
+        """))
+        if result.rowcount:
+            db.commit()
+            from loguru import logger
+            logger.info(f"Startup dedup: removed {result.rowcount} duplicate job(s)")

@@ -141,22 +141,25 @@ class LinkedInScraper:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _scrape_company(self, company_id: str, geo_id: str, company: str, max_results: int) -> List[Dict]:
-        jobs: List[Dict] = []
-        for start in range(0, max_results, 25):
-            cards = self._fetch_cards(f_C=company_id, geoId=geo_id, start=start)
-            if not cards:
-                break
-            jobs.extend(self._parse_cards(cards, company))
-            _delay()
-        return jobs
+        return self._paginate(max_results, company, f_C=company_id, geoId=geo_id)
 
     def _scrape_keyword(self, keywords: str, geo_id: str, company: str, max_results: int) -> List[Dict]:
+        return self._paginate(max_results, company, keywords=keywords, geoId=geo_id)
+
+    def _paginate(self, max_results: int, company: str, **params) -> List[Dict]:
         jobs: List[Dict] = []
+        seen_ids: set = set()
         for start in range(0, max_results, 25):
-            cards = self._fetch_cards(keywords=keywords, geoId=geo_id, start=start)
+            cards = self._fetch_cards(start=start, **params)
             if not cards:
                 break
-            jobs.extend(self._parse_cards(cards, company))
+            for job in self._parse_cards(cards, company):
+                jid = job.get("linkedin_job_id")
+                if jid and jid in seen_ids:
+                    continue
+                if jid:
+                    seen_ids.add(jid)
+                jobs.append(job)
             _delay()
         return jobs
 
