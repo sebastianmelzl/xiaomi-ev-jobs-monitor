@@ -129,21 +129,30 @@ async function renderOverview() {
         return;
       }
 
-      el.innerHTML = recent.items.map(j => `
-        <div class="ov-recent-row" onclick="openJobModal(${j.id})">
-          <div class="score-bar ov-recent-score">
-            <div class="score-track">
-              <div class="score-fill ${(j.ev_score ?? 0) >= 60 ? 'high' : 'mid'}" style="width:${j.ev_score ?? 0}%"></div>
+      el.innerHTML = recent.items.map(j => {
+        const n = jobNewness(j);
+        const nBadge = n === 'new'
+          ? '<span class="newness-badge newness-new">New Post</span>'
+          : n === 'found'
+          ? '<span class="newness-badge newness-found">Just Found</span>'
+          : '';
+        const postedStr = j.posted_date_normalized ? formatDate(j.posted_date_normalized) : escHtml(j.posted_text_raw || '–');
+        return `
+          <div class="ov-recent-row" onclick="openJobModal(${j.id})">
+            <div class="score-bar ov-recent-score">
+              <div class="score-track">
+                <div class="score-fill ${(j.ev_score ?? 0) >= 60 ? 'high' : 'mid'}" style="width:${j.ev_score ?? 0}%"></div>
+              </div>
+              <span class="score-num">${j.ev_score ?? 0}</span>
             </div>
-            <span class="score-num">${j.ev_score ?? 0}</span>
+            <div class="ov-recent-info">
+              <div class="ov-recent-title">${escHtml(j.title || '–')}</div>
+              <div class="ov-recent-meta">${[j.department, j.location].filter(Boolean).map(escHtml).join(' · ')}</div>
+            </div>
+            <div class="ov-recent-date">${postedStr}${nBadge}</div>
           </div>
-          <div class="ov-recent-info">
-            <div class="ov-recent-title">${escHtml(j.title || '–')}</div>
-            <div class="ov-recent-meta">${[j.department, j.location].filter(Boolean).map(escHtml).join(' · ')}</div>
-          </div>
-          <div class="ov-recent-date">${j.posted_date_normalized ? formatDate(j.posted_date_normalized) : escHtml(j.posted_text_raw || '–')}</div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     } catch (_) {
       const el = document.getElementById('recentJobsList');
       if (el) el.innerHTML = '<div class="ov-card-body"><p class="text-muted">Could not load recent jobs.</p></div>';

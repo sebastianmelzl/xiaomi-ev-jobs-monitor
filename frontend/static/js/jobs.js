@@ -7,10 +7,30 @@ const DEPT_ICONS = {
   'Business & Operations': '📊',
 };
 
+const NEW_POST_DAYS  = 14;   // posted_date within this → "New Post"
+const FOUND_DAYS     = 3;    // first_seen within this AND posted older → "Just Found"
+
 let jobsState = {
   search: '', status: 'active',
-  collapsed: {},   // dept → true/false
+  newOnly: false,
+  collapsed: {},
 };
+
+/**
+ * Returns 'new' | 'found' | null.
+ *  new   = posted_date_normalized ≤ NEW_POST_DAYS ago  (genuinely fresh on LinkedIn)
+ *  found = first_seen_at ≤ FOUND_DAYS ago AND posted is older (just discovered by scraper)
+ */
+function jobNewness(job) {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const posted   = job.posted_date_normalized ? new Date(job.posted_date_normalized).getTime() : null;
+  const firstSeen = job.first_seen_at ? new Date(job.first_seen_at).getTime() : null;
+
+  if (posted !== null && (now - posted) / DAY <= NEW_POST_DAYS) return 'new';
+  if (firstSeen !== null && (now - firstSeen) / DAY <= FOUND_DAYS) return 'found';
+  return null;
+}
 
 async function renderJobs() {
   setPageTitle('EV Jobs', 'Active & monitored roles');
@@ -25,6 +45,9 @@ async function renderJobs() {
           <option value="missing" ${jobsState.status === 'missing' ? 'selected' : ''}>Missing</option>
           <option value=""        ${jobsState.status === ''        ? 'selected' : ''}>All statuses</option>
         </select>
+        <button class="btn btn-sm ${jobsState.newOnly ? 'btn-primary' : 'btn-secondary'}" id="btnNewOnly" onclick="toggleNewOnly()">
+          New Posts
+        </button>
         <div class="filters-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">↓ Export CSV</button>
       </div>
@@ -48,6 +71,13 @@ async function renderJobs() {
   loadJobsSections();
 }
 
+function toggleNewOnly() {
+  jobsState.newOnly = !jobsState.newOnly;
+  const btn = document.getElementById('btnNewOnly');
+  if (btn) btn.className = `btn btn-sm ${jobsState.newOnly ? 'btn-primary' : 'btn-secondary'}`;
+  loadJobsSections();
+}
+
 async function loadJobsSections() {
   const wrap = document.getElementById('jobsSections');
   if (!wrap) return;
@@ -64,19 +94,24 @@ async function loadJobsSections() {
 
     const data = await API.jobs(params);
 
-    if (data.items.length === 0) {
+    // Client-side "New Posts only" filter
+    const items = jobsState.newOnly
+      ? data.items.filter(j => jobNewness(j) === 'new')
+      : data.items;
+
+    if (items.length === 0) {
       wrap.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">🔍</div>
-          <div class="empty-state-title">No jobs found</div>
-          <div class="empty-state-sub">Try adjusting filters or run a scrape</div>
+          <div class="empty-state-title">${jobsState.newOnly ? 'No new posts in the last 14 days' : 'No jobs found'}</div>
+          <div class="empty-state-sub">${jobsState.newOnly ? 'Try turning off the New Posts filter' : 'Try adjusting filters or run a scrape'}</div>
         </div>`;
       return;
     }
 
     // Group by department
     const groups = {};
-    for (const job of data.items) {
+    for (const job of items) {
       const dept = DEPT_ORDER.includes(job.department) ? job.department : 'Other';
       if (!groups[dept]) groups[dept] = [];
       groups[dept].push(job);
@@ -86,7 +121,7 @@ async function loadJobsSections() {
     const order = [...DEPT_ORDER.filter(d => groups[d]), ...(groups['Other'] ? ['Other'] : [])];
 
     wrap.innerHTML = `
-      <div style="font-size:12px;color:var(--text-muted);padding:0 0 12px 0">${data.total} job${data.total !== 1 ? 's' : ''}</div>
+      <div style="font-size:12px;color:var(--text-muted);padding:0 0 12px 0">${items.length} job${items.length !== 1 ? 's' : ''}${jobsState.newOnly ? ' · New Posts filter active' : ''}</div>
       ${order.map(dept => renderDeptSection(dept, groups[dept])).join('')}
     `;
 
@@ -148,6 +183,13 @@ function toggleDeptSection(dept, sectionId) {
   chevron.classList.toggle('collapsed', jobsState.collapsed[dept]);
 }
 
+function newnessHtml(job) {
+  const n = jobNewness(job);
+  if (n === 'new')   return '<span class="newness-badge newness-new">New Post</span>';
+  if (n === 'found') return '<span class="newness-badge newness-found">Just Found</span>';
+  return '';
+}
+
 function jobRow(job) {
   const score = job.ev_score ?? 0;
   const scoreClass = score >= 60 ? 'high' : 'mid';
@@ -162,6 +204,8 @@ function jobRow(job) {
     ? `<span class="delta ${delta24h > 0 ? 'positive' : delta24h < 0 ? 'negative' : 'neutral'}">${delta24h > 0 ? '+' : ''}${delta24h}</span>`
     : '<span class="text-muted">–</span>';
 
+  const postedStr = job.posted_date_normalized ? formatDate(job.posted_date_normalized) : escHtml(job.posted_text_raw || '–');
+
   return `
     <tr class="job-row" data-id="${job.id}">
       <td>
@@ -172,7 +216,7 @@ function jobRow(job) {
       </td>
       <td><span class="truncate" title="${escHtml(job.title || '')}">${escHtml(job.title || '–')}</span></td>
       <td><span class="truncate" title="${escHtml(job.location || '')}">${escHtml(job.location || '–')}</span></td>
-      <td class="text-muted">${job.posted_date_normalized ? formatDate(job.posted_date_normalized) : escHtml(job.posted_text_raw || '–')}</td>
+      <td class="text-muted nowrap">${postedStr}${newnessHtml(job)}</td>
       <td>${applicantDisplay}</td>
       <td>${deltaHtml}</td>
       <td><span class="badge badge-${job.status}">${job.status}</span></td>
