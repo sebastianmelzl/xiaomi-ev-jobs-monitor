@@ -75,6 +75,7 @@ def _build_job_list_item(job: Job) -> JobListItem:
         ev_label=ev_label,
         ev_score=ev_score,
         ev_confidence=ev_confidence,
+        is_reposted=job.is_reposted,
         applicant_count_current=current_count,
         applicant_count_quality=current_quality,
         applicant_delta_24h=delta_24h,

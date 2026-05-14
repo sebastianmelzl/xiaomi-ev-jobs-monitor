@@ -17,6 +17,9 @@ function router() {
   const [path] = hash.split('?');
   const renderer = ROUTES[path] || renderOverview;
 
+  // Stop jobs live-poller when navigating away from jobs page
+  if (path !== '/jobs' && typeof _stopPoller === 'function') _stopPoller();
+
   // Update active nav item
   document.querySelectorAll('.nav-item').forEach(el => {
     const route = el.dataset.route;

@@ -7,7 +7,7 @@ const DEPT_ICONS = {
   'Business & Operations': '📊',
 };
 
-const NEW_POST_DAYS = 14;  // posted_date within this (and not reposted) → "New"
+const NEW_POST_DAYS = 14;
 
 let jobsState = {
   search: '', status: 'active',
@@ -15,11 +15,51 @@ let jobsState = {
   collapsed: {},
 };
 
-/**
- * Returns 'reposted' | 'new' | null.
- *  reposted = LinkedIn marked it as "erneut veröffentlicht"
- *  new      = posted_date_normalized ≤ NEW_POST_DAYS ago and NOT reposted
- */
+// Live-update poller
+let _jobsPoller = null;
+let _pollScrapeWasRunning = false;
+
+function _startPoller() {
+  _stopPoller();
+  _jobsPoller = setInterval(async () => {
+    if (!document.getElementById('jobsSections')) { _stopPoller(); return; }
+    try {
+      const status = await API.scrapeStatus();
+      const running = status.is_running;
+      if (running) {
+        _pollScrapeWasRunning = true;
+        await _silentRefresh();
+      } else if (_pollScrapeWasRunning) {
+        // Scrape just finished — do one final refresh
+        _pollScrapeWasRunning = false;
+        await _silentRefresh();
+        showToast('Scrape finished — job list updated', 'success');
+      }
+    } catch { /* ignore poll errors */ }
+  }, 8000);
+}
+
+function _stopPoller() {
+  if (_jobsPoller) { clearInterval(_jobsPoller); _jobsPoller = null; }
+}
+
+// Refresh without showing a loading spinner (keeps current content visible)
+async function _silentRefresh() {
+  const wrap = document.getElementById('jobsSections');
+  if (!wrap) return;
+  try {
+    const params = {
+      page: 1, page_size: 500,
+      sort_by: 'posted_date_normalized', sort_dir: 'desc',
+      ev_only: 'true',
+    };
+    if (jobsState.search) params.search = jobsState.search;
+    if (jobsState.status) params.status = jobsState.status;
+    const data = await API.jobs(params);
+    _renderJobsInto(wrap, data.items);
+  } catch { /* keep old content on error */ }
+}
+
 function jobNewness(job) {
   if (job.is_reposted) return 'reposted';
   const posted = job.posted_date_normalized ? new Date(job.posted_date_normalized).getTime() : null;
@@ -53,17 +93,14 @@ async function renderJobs() {
   let searchTimeout;
   document.getElementById('jobSearch').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      jobsState.search = e.target.value;
-      loadJobsSections();
-    }, 300);
+    searchTimeout = setTimeout(() => { jobsState.search = e.target.value; loadJobsSections(); }, 300);
   });
   document.getElementById('jobStatus').addEventListener('change', (e) => {
-    jobsState.status = e.target.value;
-    loadJobsSections();
+    jobsState.status = e.target.value; loadJobsSections();
   });
 
   loadJobsSections();
+  _startPoller();
 }
 
 function toggleNewOnly() {
@@ -77,57 +114,52 @@ async function loadJobsSections() {
   const wrap = document.getElementById('jobsSections');
   if (!wrap) return;
   wrap.innerHTML = loadingHtml();
-
   try {
     const params = {
       page: 1, page_size: 500,
       sort_by: 'posted_date_normalized', sort_dir: 'desc',
       ev_only: 'true',
     };
-    if (jobsState.search)  params.search = jobsState.search;
-    if (jobsState.status)  params.status = jobsState.status;
-
+    if (jobsState.search) params.search = jobsState.search;
+    if (jobsState.status) params.status = jobsState.status;
     const data = await API.jobs(params);
-
-    // Client-side "New Posts only" filter — excludes reposted jobs
-    const items = jobsState.newOnly
-      ? data.items.filter(j => jobNewness(j) === 'new')
-      : data.items;
-
-    if (items.length === 0) {
-      wrap.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🔍</div>
-          <div class="empty-state-title">${jobsState.newOnly ? 'No new posts in the last 14 days' : 'No jobs found'}</div>
-          <div class="empty-state-sub">${jobsState.newOnly ? 'Try turning off the New Posts filter' : 'Try adjusting filters or run a scrape'}</div>
-        </div>`;
-      return;
-    }
-
-    // Group by department
-    const groups = {};
-    for (const job of items) {
-      const dept = DEPT_ORDER.includes(job.department) ? job.department : 'Other';
-      if (!groups[dept]) groups[dept] = [];
-      groups[dept].push(job);
-    }
-
-    // Render sections in fixed order, then "Other" if present
-    const order = [...DEPT_ORDER.filter(d => groups[d]), ...(groups['Other'] ? ['Other'] : [])];
-
-    wrap.innerHTML = `
-      <div style="font-size:12px;color:var(--text-muted);padding:0 0 12px 0">${items.length} job${items.length !== 1 ? 's' : ''}${jobsState.newOnly ? ' · New Posts filter active' : ''}</div>
-      ${order.map(dept => renderDeptSection(dept, groups[dept])).join('')}
-    `;
-
-    // Row click → modal
-    wrap.querySelectorAll('.job-row').forEach(row => {
-      row.addEventListener('click', () => openJobModal(parseInt(row.dataset.id)));
-    });
-
+    _renderJobsInto(wrap, data.items);
   } catch (err) {
     wrap.innerHTML = errorHtml(err.message);
   }
+}
+
+function _renderJobsInto(wrap, allItems) {
+  const items = jobsState.newOnly
+    ? allItems.filter(j => jobNewness(j) === 'new')
+    : allItems;
+
+  if (items.length === 0) {
+    wrap.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        <div class="empty-state-title">${jobsState.newOnly ? 'No new posts in the last 14 days' : 'No jobs found'}</div>
+        <div class="empty-state-sub">${jobsState.newOnly ? 'Try turning off the New Posts filter' : 'Try adjusting filters or run a scrape'}</div>
+      </div>`;
+    return;
+  }
+
+  const groups = {};
+  for (const job of items) {
+    const dept = DEPT_ORDER.includes(job.department) ? job.department : 'Other';
+    if (!groups[dept]) groups[dept] = [];
+    groups[dept].push(job);
+  }
+  const order = [...DEPT_ORDER.filter(d => groups[d]), ...(groups['Other'] ? ['Other'] : [])];
+
+  wrap.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);padding:0 0 12px 0">${items.length} job${items.length !== 1 ? 's' : ''}${jobsState.newOnly ? ' · New Posts filter active' : ''}</div>
+    ${order.map(dept => renderDeptSection(dept, groups[dept])).join('')}
+  `;
+
+  wrap.querySelectorAll('.job-row').forEach(row => {
+    row.addEventListener('click', () => openJobModal(parseInt(row.dataset.id)));
+  });
 }
 
 function renderDeptSection(dept, jobs) {
@@ -183,10 +215,8 @@ function toggleDeptSection(dept, sectionId) {
   jobsState.collapsed[dept] = !jobsState.collapsed[dept];
   const section = document.getElementById(sectionId);
   if (!section) return;
-  const body    = section.querySelector('.dept-body');
-  const chevron = section.querySelector('.dept-chevron');
-  body.classList.toggle('collapsed', jobsState.collapsed[dept]);
-  chevron.classList.toggle('collapsed', jobsState.collapsed[dept]);
+  section.querySelector('.dept-body').classList.toggle('collapsed', jobsState.collapsed[dept]);
+  section.querySelector('.dept-chevron').classList.toggle('collapsed', jobsState.collapsed[dept]);
 }
 
 function newnessHtml(job) {
@@ -211,8 +241,6 @@ function jobRow(job, dimmed = false) {
     : '<span class="text-muted">–</span>';
 
   const postedStr = job.posted_date_normalized ? formatDate(job.posted_date_normalized) : escHtml(job.posted_text_raw || '–');
-
-  // Show "New" badge only for non-reposted jobs; reposted jobs are grouped under the divider
   const badgeHtml = job.is_reposted ? '' : newnessHtml(job);
 
   return `
