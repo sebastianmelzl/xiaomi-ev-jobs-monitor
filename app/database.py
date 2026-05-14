@@ -79,22 +79,22 @@ def _normalize_locations() -> None:
 
 
 def _normalize_departments() -> None:
-    """Map all existing department strings to one of the three canonical groups."""
+    """Re-classify all jobs using title + department field for better accuracy."""
     from app.models import Job
-    from app.scraper.normalizer import normalize_department
+    from app.scraper.normalizer import classify_department
     from loguru import logger
     from sqlalchemy import select
     with SessionLocal() as db:
-        jobs = db.execute(select(Job).where(Job.department.isnot(None))).scalars().all()
+        jobs = db.execute(select(Job)).scalars().all()
         updated = 0
         for job in jobs:
-            normalized = normalize_department(job.department)
-            if normalized and normalized != job.department:
-                job.department = normalized
+            classified = classify_department(job.title, job.department)
+            if classified and classified != job.department:
+                job.department = classified
                 updated += 1
         if updated:
             db.commit()
-            logger.info(f"Department normalization: updated {updated} job(s)")
+            logger.info(f"Department re-classification: updated {updated} job(s)")
 
 
 def _dedup_jobs() -> None:

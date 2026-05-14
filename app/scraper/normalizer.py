@@ -258,17 +258,15 @@ DEPT_ENGINEERING = "Engineering & R&D"
 DEPT_PRODUCT     = "Product & Design"
 DEPT_BUSINESS    = "Business & Operations"
 
-# Ordered rules: first keyword match wins.  Longer / more-specific strings first.
-_DEPT_RULES: list[tuple[list[str], str]] = [
+# Rules applied to LinkedIn's "Job Function" field.
+_DEPT_FIELD_RULES: list[tuple[list[str], str]] = [
     ([
-        "engineering", "research", "science",
-        "information technology", "quality assurance",
-        "manufacturing", "technical",
+        "engineering", "research", "science", "information technology",
+        "quality assurance", "manufacturing", "technical",
     ], DEPT_ENGINEERING),
     ([
-        "product management", "product", "design",
-        "art/creative", "creative", "strategy", "planning",
-        "user experience",
+        "product management", "product", "design", "art/creative",
+        "creative", "strategy", "planning", "user experience",
     ], DEPT_PRODUCT),
     ([
         "sales", "marketing", "business development", "business",
@@ -279,19 +277,83 @@ _DEPT_RULES: list[tuple[list[str], str]] = [
     ], DEPT_BUSINESS),
 ]
 
+# Rules applied to the job title — longer/more-specific phrases first.
+_DEPT_TITLE_RULES: list[tuple[list[str], str]] = [
+    ([
+        # Engineering & R&D title signals
+        "r&d", "research", "researcher", "scientist", "engineer", "engineering",
+        "developer", "architect", "software", "hardware", "firmware", "embedded",
+        "algorithm", "machine learning", "deep learning", "artificial intelligence",
+        "computer vision", "autonomous", "autopilot", "lidar", "radar",
+        "battery", "powertrain", "electric motor", "thermal management",
+        "mechanical", "electrical", "electronic", "simulation", "cfd",
+        "quality assurance", "qa", "test engineer", "testing", "validation",
+        "data scientist", "data engineer", "devops", "sre", "platform engineer",
+        "full stack", "frontend", "backend", "ios", "android", "mobile developer",
+        "cloud engineer", "network engineer", "security engineer", "cybersecurity",
+        "manufacturing engineer", "process engineer", "industrial engineer",
+        "technical lead", "tech lead", "staff engineer", "principal engineer",
+    ], DEPT_ENGINEERING),
+    ([
+        # Product & Design title signals
+        "product manager", "product owner", "product lead", "product director",
+        "ux", "ui ", "ui/ux", "user experience", "user interface",
+        "interaction design", "visual design", "graphic design",
+        "brand design", "brand manager", "brand director",
+        "creative director", "art director", "motion design",
+        "industrial design", "industrial designer",
+    ], DEPT_PRODUCT),
+    ([
+        # Business & Operations title signals
+        "sales", "account manager", "account executive", "sales manager",
+        "business development", "bd manager", "bd director",
+        "marketing manager", "marketing director", "marketing specialist",
+        "growth", "demand generation", "campaign manager",
+        "finance", "financial", "controller", "accountant", "treasury",
+        "legal", "counsel", "compliance", "regulatory",
+        "hr ", "human resources", "recruiter", "recruiting", "talent",
+        "people partner", "hrbp",
+        "operations manager", "operations director", "biz ops",
+        "supply chain", "logistics", "procurement", "purchasing",
+        "project manager", "program manager",
+        "communications", "public relations", "pr manager",
+        "strategy", "strategic", "business analyst",
+        "customer success", "customer experience", "customer service",
+        "content", "copywriter", "social media",
+        "general manager", "managing director",
+    ], DEPT_BUSINESS),
+]
 
-def normalize_department(department: Optional[str]) -> Optional[str]:
-    """
-    Map any LinkedIn job-function string to one of three canonical groups.
-    Returns None when the input is empty.
-    """
-    if not department:
-        return None
-    lower = department.strip().lower()
-    for keywords, group in _DEPT_RULES:
+
+def _match_rules(text: str, rules: list) -> Optional[str]:
+    lower = text.strip().lower()
+    for keywords, group in rules:
         if any(kw in lower for kw in keywords):
             return group
-    return department.strip()  # keep as-is if nothing matched
+    return None
+
+
+def normalize_department(department: Optional[str]) -> Optional[str]:
+    """Map LinkedIn job-function string to one of three canonical groups."""
+    if not department:
+        return None
+    return _match_rules(department, _DEPT_FIELD_RULES) or department.strip()
+
+
+def classify_department(title: Optional[str], department: Optional[str]) -> Optional[str]:
+    """
+    Determine the canonical department using both the LinkedIn field and the
+    job title.  Title takes priority when it produces a confident match,
+    otherwise the field result is used.
+    """
+    field_result = normalize_department(department)
+    title_result = _match_rules(title or "", _DEPT_TITLE_RULES)
+
+    # If title gives a clear signal, prefer it
+    if title_result:
+        return title_result
+    # Otherwise fall back to the field result (may be None)
+    return field_result
 
 
 def _parse_int(s: str) -> Optional[int]:

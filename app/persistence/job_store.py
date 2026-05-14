@@ -13,7 +13,7 @@ from app.models import (
     JobRunPresence, JobChangeLog, JobStatus, ChangeType, ApplicantQuality
 )
 from app.classifier.ev_classifier import ClassificationResult
-from app.scraper.normalizer import normalize_department, normalize_location
+from app.scraper.normalizer import classify_department, normalize_location
 
 
 class JobStore:
@@ -62,7 +62,7 @@ class JobStore:
             company_name=raw.get("company"),
             title=raw.get("title"),
             location=normalize_location(raw.get("location")),
-            department=normalize_department(raw.get("department")),
+            department=classify_department(raw.get("title"), raw.get("department")),
             employment_type=raw.get("employment_type"),
             seniority_level=raw.get("seniority_level"),
             job_url=raw.get("job_url"),
@@ -118,7 +118,7 @@ class JobStore:
             "location": normalize_location(raw.get("location")),
             "employment_type": raw.get("employment_type"),
             "seniority_level": raw.get("seniority_level"),
-            "department": normalize_department(raw.get("department")),
+            "department": classify_department(raw.get("title"), raw.get("department")),
         }
         for field, new_val in trackable.items():
             old_val = getattr(job, field)
