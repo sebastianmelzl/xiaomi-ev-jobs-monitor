@@ -182,24 +182,42 @@ async function toggleReposted(jobId, btn) {
   try {
     const result = await API.toggleReposted(jobId);
     const isReposted = result.is_reposted;
+
+    // Update button in modal
     btn.textContent = isReposted ? '↩ Reposted' : '↩ Mark Repost';
     btn.style.color = isReposted ? 'var(--yellow)' : '';
     btn.title = isReposted ? 'Mark as new post' : 'Mark as reposted';
-    // Update badge in header
-    const badgeEl = document.querySelector('.newness-badge');
-    if (isReposted) {
-      if (!badgeEl) {
-        const badgeWrap = btn.closest('[style*="display:flex"]').previousElementSibling?.querySelector('[style*="display:flex"]');
-        if (badgeWrap) {
-          const span = document.createElement('span');
-          span.className = 'newness-badge newness-reposted';
-          span.textContent = 'Reposted';
-          badgeWrap.appendChild(span);
+
+    // Update badge in modal header
+    const modalBadge = document.querySelector('#jobModalPanel .newness-badge');
+    if (isReposted && !modalBadge) {
+      const badgesRow = document.querySelector('#jobModalPanel .badge')?.parentElement;
+      if (badgesRow) {
+        const s = document.createElement('span');
+        s.className = 'newness-badge newness-reposted';
+        s.textContent = 'Reposted';
+        badgesRow.appendChild(s);
+      }
+    } else if (!isReposted && modalBadge) {
+      modalBadge.remove();
+    }
+
+    // Update badge in the jobs list row (td contains postedStr + badge)
+    const listRow = document.querySelector(`.job-row[data-id="${jobId}"]`);
+    if (listRow) {
+      const postedCell = listRow.querySelector('td.text-muted.nowrap');
+      if (postedCell) {
+        const existing = postedCell.querySelector('.newness-badge');
+        if (existing) existing.remove();
+        if (isReposted) {
+          const s = document.createElement('span');
+          s.className = 'newness-badge newness-reposted';
+          s.textContent = 'Reposted';
+          postedCell.appendChild(s);
         }
       }
-    } else {
-      if (badgeEl) badgeEl.remove();
     }
+
     showToast(isReposted ? 'Marked as Reposted' : 'Marked as New Post', 'success');
   } catch (err) {
     showToast('Could not update: ' + err.message, 'error');
