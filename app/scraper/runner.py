@@ -86,10 +86,17 @@ class ScrapeRunner:
                         ]
                         filtered_out = len(raw_jobs) - len(xiaomi_jobs)
 
-                        unique_jobs = [
-                            j for j in xiaomi_jobs
-                            if j.get("canonical_job_key") not in seen_this_run
-                        ]
+                        unique_jobs = []
+                        for j in xiaomi_jobs:
+                            key = j.get("canonical_job_key")
+                            title_key = f"{(j.get('title') or '').strip().lower()}|{(j.get('company') or '').strip().lower()}"
+                            if key in seen_this_run or title_key in seen_this_run:
+                                continue
+                            unique_jobs.append(j)
+                            if key:
+                                seen_this_run.add(key)
+                            if title_key:
+                                seen_this_run.add(title_key)
                         dupes = len(xiaomi_jobs) - len(unique_jobs)
 
                         msg = f"  Found {len(raw_jobs)} jobs"
@@ -101,10 +108,6 @@ class ScrapeRunner:
 
                         for raw_job in unique_jobs:
                             try:
-                                key = raw_job.get("canonical_job_key")
-                                if key:
-                                    seen_this_run.add(key)
-
                                 if enrich_details and raw_job.get("canonical_url"):
                                     raw_job = scraper.enrich_job_details(raw_job)
 

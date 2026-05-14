@@ -180,6 +180,27 @@ def list_jobs(
     return PaginatedJobs(total=total, page=page, page_size=page_size, items=items)
 
 
+@router.get("/jobs/hidden")
+def list_hidden_jobs(db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(HiddenJob, Job)
+        .join(Job, Job.id == HiddenJob.job_id)
+        .order_by(desc(HiddenJob.hidden_at))
+    ).all()
+    return [
+        {
+            "job_id": h.job_id,
+            "hidden_at": h.hidden_at.isoformat(),
+            "title": j.title,
+            "company": j.company_name,
+            "location": j.location,
+            "department": j.department,
+            "job_url": j.job_url,
+        }
+        for h, j in rows
+    ]
+
+
 @router.get("/jobs/{job_id}", response_model=JobDetail)
 def get_job(job_id: int, db: Session = Depends(get_db)):
     job = db.execute(
@@ -239,24 +260,3 @@ def unhide_job(job_id: int, db: Session = Depends(get_db)):
         db.delete(row)
         db.commit()
     return {"hidden": False, "job_id": job_id}
-
-
-@router.get("/jobs/hidden")
-def list_hidden_jobs(db: Session = Depends(get_db)):
-    rows = db.execute(
-        select(HiddenJob, Job)
-        .join(Job, Job.id == HiddenJob.job_id)
-        .order_by(desc(HiddenJob.hidden_at))
-    ).all()
-    return [
-        {
-            "job_id": h.job_id,
-            "hidden_at": h.hidden_at.isoformat(),
-            "title": j.title,
-            "company": j.company_name,
-            "location": j.location,
-            "department": j.department,
-            "job_url": j.job_url,
-        }
-        for h, j in rows
-    ]

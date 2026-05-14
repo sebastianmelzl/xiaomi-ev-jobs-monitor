@@ -43,10 +43,12 @@ def init_db() -> None:
 
 
 def _dedup_jobs() -> None:
-    """Remove duplicate jobs that share the same linkedin_job_id (keep lowest id)."""
+    """Remove duplicate jobs — by linkedin_job_id first, then by normalized title+company."""
     from sqlalchemy import text
+    from loguru import logger
     with SessionLocal() as db:
-        result = db.execute(text("""
+        # Pass 1: same linkedin_job_id
+        r1 = db.execute(text("""
             DELETE FROM jobs
             WHERE linkedin_job_id IS NOT NULL
               AND id NOT IN (
@@ -55,7 +57,16 @@ def _dedup_jobs() -> None:
                   GROUP BY linkedin_job_id
               )
         """))
-        if result.rowcount:
+        # Pass 2: same normalized title + company (catches different IDs for same posting)
+        r2 = db.execute(text("""
+            DELETE FROM jobs
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM jobs
+                GROUP BY LOWER(TRIM(COALESCE(title, ''))),
+                         LOWER(TRIM(COALESCE(company_name, '')))
+            )
+        """))
+        removed = (r1.rowcount or 0) + (r2.rowcount or 0)
+        if removed:
             db.commit()
-            from loguru import logger
-            logger.info(f"Startup dedup: removed {result.rowcount} duplicate job(s)")
+            logger.info(f"Startup dedup: removed {removed} duplicate job(s)")
