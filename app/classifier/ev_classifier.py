@@ -93,6 +93,15 @@ class EVClassifier:
         reasoning: List[str] = []
         score = 0
 
+        # "xiaomi ev" in title or description → guaranteed core_ev
+        if "xiaomi ev" in title or "xiaomi ev" in description:
+            return ClassificationResult(
+                ev_score=100,
+                ev_confidence=1.0,
+                ev_label=EVLabel.core_ev,
+                reasoning=["Score override: 'xiaomi ev' found in title or description"],
+            )
+
         # Check excluded title patterns first
         for pattern in self._excluded_title_patterns:
             if pattern.search(title):
