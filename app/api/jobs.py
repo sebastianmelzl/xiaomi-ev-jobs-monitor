@@ -260,3 +260,14 @@ def unhide_job(job_id: int, db: Session = Depends(get_db)):
         db.delete(row)
         db.commit()
     return {"hidden": False, "job_id": job_id}
+
+
+@router.patch("/jobs/{job_id}/reposted")
+def set_reposted(job_id: int, db: Session = Depends(get_db)):
+    """Toggle is_reposted flag on a job."""
+    job = db.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.is_reposted = not job.is_reposted
+    db.commit()
+    return {"job_id": job_id, "is_reposted": job.is_reposted}

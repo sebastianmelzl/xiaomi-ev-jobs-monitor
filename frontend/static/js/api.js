@@ -30,6 +30,7 @@ const API = {
   runLogs: (id) => apiFetch(`/scrape/runs/${id}/logs`),
   hideJob: (id) => apiFetch(`/jobs/${id}/hide`, { method: 'POST' }),
   unhideJob: (id) => apiFetch(`/jobs/${id}/hide`, { method: 'DELETE' }),
+  toggleReposted: (id) => apiFetch(`/jobs/${id}/reposted`, { method: 'PATCH' }),
   hiddenJobs: () => apiFetch('/jobs/hidden'),
   scrapeStatus: () => apiFetch('/scrape/status'),
   triggerScrape: (sourceNames = null) => apiFetch('/scrape/run', {

@@ -27,7 +27,15 @@ async function openJobModal(jobId) {
           <h2 style="font-size:17px;font-weight:700;line-height:1.3">${escHtml(job.title || 'Untitled')}</h2>
           <p style="color:var(--text-secondary);margin-top:4px;font-size:13px">${escHtml(job.company_name || '')} · ${escHtml(job.location || '')}</p>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="closeJobModal()" style="flex-shrink:0;margin-left:12px">✕ Close</button>
+        <div style="display:flex;gap:8px;flex-shrink:0;margin-left:12px">
+          <button class="btn btn-ghost btn-sm" id="repostToggleBtn"
+            onclick="toggleReposted(${job.id}, this)"
+            title="${job.is_reposted ? 'Mark as new post' : 'Mark as reposted'}"
+            style="${job.is_reposted ? 'color:var(--yellow)' : ''}">
+            ${job.is_reposted ? '↩ Reposted' : '↩ Mark Repost'}
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="closeJobModal()">✕ Close</button>
+        </div>
       </div>
 
       <div class="job-meta-grid">
@@ -168,6 +176,34 @@ function changeLogItem(c) {
 
 function formatEVLabelFull(label) {
   return { core_ev: 'Core EV', likely_ev: 'Likely EV', maybe_ev: 'Maybe EV', non_ev: 'Non-EV' }[label] || label;
+}
+
+async function toggleReposted(jobId, btn) {
+  try {
+    const result = await API.toggleReposted(jobId);
+    const isReposted = result.is_reposted;
+    btn.textContent = isReposted ? '↩ Reposted' : '↩ Mark Repost';
+    btn.style.color = isReposted ? 'var(--yellow)' : '';
+    btn.title = isReposted ? 'Mark as new post' : 'Mark as reposted';
+    // Update badge in header
+    const badgeEl = document.querySelector('.newness-badge');
+    if (isReposted) {
+      if (!badgeEl) {
+        const badgeWrap = btn.closest('[style*="display:flex"]').previousElementSibling?.querySelector('[style*="display:flex"]');
+        if (badgeWrap) {
+          const span = document.createElement('span');
+          span.className = 'newness-badge newness-reposted';
+          span.textContent = 'Reposted';
+          badgeWrap.appendChild(span);
+        }
+      }
+    } else {
+      if (badgeEl) badgeEl.remove();
+    }
+    showToast(isReposted ? 'Marked as Reposted' : 'Marked as New Post', 'success');
+  } catch (err) {
+    showToast('Could not update: ' + err.message, 'error');
+  }
 }
 
 // Close modal on Escape key
