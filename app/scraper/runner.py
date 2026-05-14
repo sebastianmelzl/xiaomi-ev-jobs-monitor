@@ -79,14 +79,24 @@ class ScrapeRunner:
                             source=source,
                             company=source.get("company", "Xiaomi"),
                         )
-                        unique_jobs = [
+                        # Keep only Xiaomi jobs (filters out keyword-search noise from other companies)
+                        xiaomi_jobs = [
                             j for j in raw_jobs
+                            if "xiaomi" in (j.get("company") or "").lower()
+                        ]
+                        filtered_out = len(raw_jobs) - len(xiaomi_jobs)
+
+                        unique_jobs = [
+                            j for j in xiaomi_jobs
                             if j.get("canonical_job_key") not in seen_this_run
                         ]
-                        dupes = len(raw_jobs) - len(unique_jobs)
+                        dupes = len(xiaomi_jobs) - len(unique_jobs)
+
                         msg = f"  Found {len(raw_jobs)} jobs"
+                        if filtered_out:
+                            msg += f" → {filtered_out} non-Xiaomi filtered"
                         if dupes:
-                            msg += f" ({dupes} already seen this run, skipped)"
+                            msg += f", {dupes} already seen this run"
                         _log(run.id, "INFO", msg)
 
                         for raw_job in unique_jobs:
