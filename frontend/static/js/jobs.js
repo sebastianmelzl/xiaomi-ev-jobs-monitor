@@ -1,41 +1,34 @@
-/* EV Jobs table page */
+/* EV Jobs page — sectioned by department group */
+
+const DEPT_ORDER = ['Engineering & R&D', 'Product & Design', 'Business & Operations'];
+const DEPT_ICONS = {
+  'Engineering & R&D':     '⚙️',
+  'Product & Design':      '🎯',
+  'Business & Operations': '📊',
+};
+
 let jobsState = {
-  page: 1, pageSize: 50, total: 0,
-  search: '', status: 'active', evLabel: '', department: '',
-  sortBy: 'department', sortDir: 'asc',
+  search: '', status: 'active',
+  collapsed: {},   // dept → true/false
 };
 
 async function renderJobs() {
   setPageTitle('EV Jobs', 'Active & monitored roles');
   const content = document.getElementById('content');
 
-  // Fetch departments for filter dropdown
-  let departments = [];
-  try { departments = await API.jobDepartments(); } catch (_) {}
-
-  const deptOptions = departments.map(d =>
-    `<option value="${escHtml(d)}" ${jobsState.department === d ? 'selected' : ''}>${escHtml(d)}</option>`
-  ).join('');
-
   content.innerHTML = `
     <div class="section">
       <div class="filters-bar">
         <input type="text" class="search-input" id="jobSearch" placeholder="Search title, location…" value="${jobsState.search}" />
-        <select class="filter-select" id="jobDept">
-          <option value="" ${jobsState.department === '' ? 'selected' : ''}>All departments</option>
-          ${deptOptions}
-        </select>
         <select class="filter-select" id="jobStatus">
-          <option value="active" ${jobsState.status === 'active' ? 'selected' : ''}>Active</option>
+          <option value="active"  ${jobsState.status === 'active'  ? 'selected' : ''}>Active</option>
           <option value="missing" ${jobsState.status === 'missing' ? 'selected' : ''}>Missing</option>
-          <option value="" ${jobsState.status === '' ? 'selected' : ''}>All statuses</option>
+          <option value=""        ${jobsState.status === ''        ? 'selected' : ''}>All statuses</option>
         </select>
         <div class="filters-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">↓ Export CSV</button>
       </div>
-      <div id="jobsTableWrap">
-        ${loadingHtml()}
-      </div>
+      <div id="jobsSections">${loadingHtml()}</div>
     </div>
   `;
 
@@ -44,43 +37,32 @@ async function renderJobs() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
       jobsState.search = e.target.value;
-      jobsState.page = 1;
-      loadJobsTable();
+      loadJobsSections();
     }, 300);
-  });
-  document.getElementById('jobDept').addEventListener('change', (e) => {
-    jobsState.department = e.target.value;
-    jobsState.page = 1;
-    loadJobsTable();
   });
   document.getElementById('jobStatus').addEventListener('change', (e) => {
     jobsState.status = e.target.value;
-    jobsState.page = 1;
-    loadJobsTable();
+    loadJobsSections();
   });
 
-  loadJobsTable();
+  loadJobsSections();
 }
 
-async function loadJobsTable() {
-  const wrap = document.getElementById('jobsTableWrap');
+async function loadJobsSections() {
+  const wrap = document.getElementById('jobsSections');
   if (!wrap) return;
   wrap.innerHTML = loadingHtml();
 
   try {
     const params = {
-      page: jobsState.page,
-      page_size: jobsState.pageSize,
-      sort_by: jobsState.sortBy,
-      sort_dir: jobsState.sortDir,
+      page: 1, page_size: 500,
+      sort_by: 'posted_date_normalized', sort_dir: 'desc',
+      ev_only: 'true',
     };
-    if (jobsState.search) params.search = jobsState.search;
-    if (jobsState.status) params.status = jobsState.status;
-    if (jobsState.department) params.department = jobsState.department;
-    params.ev_only = 'true';
+    if (jobsState.search)  params.search = jobsState.search;
+    if (jobsState.status)  params.status = jobsState.status;
 
     const data = await API.jobs(params);
-    jobsState.total = data.total;
 
     if (data.items.length === 0) {
       wrap.innerHTML = `
@@ -88,54 +70,28 @@ async function loadJobsTable() {
           <div class="empty-state-icon">🔍</div>
           <div class="empty-state-title">No jobs found</div>
           <div class="empty-state-sub">Try adjusting filters or run a scrape</div>
-        </div>
-      `;
+        </div>`;
       return;
     }
 
+    // Group by department
+    const groups = {};
+    for (const job of data.items) {
+      const dept = DEPT_ORDER.includes(job.department) ? job.department : 'Other';
+      if (!groups[dept]) groups[dept] = [];
+      groups[dept].push(job);
+    }
+
+    // Render sections in fixed order, then "Other" if present
+    const order = [...DEPT_ORDER.filter(d => groups[d]), ...(groups['Other'] ? ['Other'] : [])];
+
     wrap.innerHTML = `
-      <div class="table-wrap">
-        <table class="data-table" id="jobsTable">
-          <thead>
-            <tr>
-              <th data-col="ev_score" class="${jobsState.sortBy === 'ev_score' ? 'sort-' + jobsState.sortDir : ''}">Score</th>
-              <th data-col="title">Title</th>
-              <th data-col="location">Location</th>
-              <th data-col="department" class="${jobsState.sortBy === 'department' ? 'sort-' + jobsState.sortDir : ''}">Department</th>
-              <th data-col="posted_date_normalized" class="${jobsState.sortBy === 'posted_date_normalized' ? 'sort-' + jobsState.sortDir : ''}">Posted</th>
-              <th data-col="applicant_count_current">Applicants</th>
-              <th data-col="delta_24h">24h Δ</th>
-              <th data-col="status">Status</th>
-              <th data-col="first_seen_at" class="${jobsState.sortBy === 'first_seen_at' ? 'sort-' + jobsState.sortDir : ''}">First Seen</th>
-              <th style="width:32px"></th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data.items.map(job => jobRow(job)).join('')}
-          </tbody>
-        </table>
-      </div>
-      ${paginationHtml(data.total, jobsState.page, jobsState.pageSize)}
+      <div style="font-size:12px;color:var(--text-muted);padding:0 0 12px 0">${data.total} job${data.total !== 1 ? 's' : ''}</div>
+      ${order.map(dept => renderDeptSection(dept, groups[dept])).join('')}
     `;
 
-    // Sort handlers
-    document.querySelectorAll('#jobsTable th[data-col]').forEach(th => {
-      th.addEventListener('click', () => {
-        const col = th.dataset.col;
-        const sortable = ['ev_score', 'department', 'first_seen_at', 'last_seen_at', 'posted_date_normalized'];
-        if (!sortable.includes(col)) return;
-        if (jobsState.sortBy === col) {
-          jobsState.sortDir = jobsState.sortDir === 'desc' ? 'asc' : 'desc';
-        } else {
-          jobsState.sortBy = col;
-          jobsState.sortDir = 'desc';
-        }
-        loadJobsTable();
-      });
-    });
-
-    // Row click
-    document.querySelectorAll('#jobsTable tbody tr').forEach(row => {
+    // Row click → modal
+    wrap.querySelectorAll('.job-row').forEach(row => {
       row.addEventListener('click', () => openJobModal(parseInt(row.dataset.id)));
     });
 
@@ -144,8 +100,55 @@ async function loadJobsTable() {
   }
 }
 
+function renderDeptSection(dept, jobs) {
+  const icon = DEPT_ICONS[dept] || '📁';
+  const isCollapsed = jobsState.collapsed[dept] || false;
+  const sectionId = `sect-${dept.replace(/[^a-z]/gi, '-')}`;
+
+  return `
+    <div class="dept-section" id="${sectionId}">
+      <div class="dept-header" onclick="toggleDeptSection('${dept}', '${sectionId}')">
+        <span class="dept-icon">${icon}</span>
+        <span class="dept-name">${escHtml(dept)}</span>
+        <span class="dept-count">${jobs.length}</span>
+        <span class="dept-chevron ${isCollapsed ? 'collapsed' : ''}">▾</span>
+      </div>
+      <div class="dept-body ${isCollapsed ? 'collapsed' : ''}">
+        <div class="table-wrap">
+          <table class="data-table dept-table">
+            <thead>
+              <tr>
+                <th style="width:80px">Score</th>
+                <th>Title</th>
+                <th>Location</th>
+                <th>Posted</th>
+                <th>Applicants</th>
+                <th>24h Δ</th>
+                <th>Status</th>
+                <th style="width:32px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${jobs.map(job => jobRow(job)).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleDeptSection(dept, sectionId) {
+  jobsState.collapsed[dept] = !jobsState.collapsed[dept];
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const body    = section.querySelector('.dept-body');
+  const chevron = section.querySelector('.dept-chevron');
+  body.classList.toggle('collapsed', jobsState.collapsed[dept]);
+  chevron.classList.toggle('collapsed', jobsState.collapsed[dept]);
+}
+
 function jobRow(job) {
-  const evLabel = job.ev_label || 'non_ev';
   const score = job.ev_score ?? 0;
   const scoreClass = score >= 60 ? 'high' : 'mid';
 
@@ -160,7 +163,7 @@ function jobRow(job) {
     : '<span class="text-muted">–</span>';
 
   return `
-    <tr data-id="${job.id}">
+    <tr class="job-row" data-id="${job.id}">
       <td>
         <div class="score-bar">
           <div class="score-track"><div class="score-fill ${scoreClass}" style="width:${score}%"></div></div>
@@ -169,47 +172,20 @@ function jobRow(job) {
       </td>
       <td><span class="truncate" title="${escHtml(job.title || '')}">${escHtml(job.title || '–')}</span></td>
       <td><span class="truncate" title="${escHtml(job.location || '')}">${escHtml(job.location || '–')}</span></td>
-      <td><span class="truncate text-muted">${escHtml(job.department || '–')}</span></td>
       <td class="text-muted">${job.posted_date_normalized ? formatDate(job.posted_date_normalized) : escHtml(job.posted_text_raw || '–')}</td>
       <td>${applicantDisplay}</td>
       <td>${deltaHtml}</td>
       <td><span class="badge badge-${job.status}">${job.status}</span></td>
-      <td class="text-muted">${formatDate(job.first_seen_at)}</td>
       <td><button class="hide-job-btn" title="Permanently hide this job" onclick="hideJob(event, ${job.id})">✕</button></td>
     </tr>
   `;
-}
-
-function paginationHtml(total, page, pageSize) {
-  const totalPages = Math.ceil(total / pageSize);
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-
-  return `
-    <div class="pagination">
-      <span>${start}–${end} of ${total} jobs</span>
-      <div class="pagination-controls">
-        <button class="page-btn" onclick="jobsChangePage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>‹ Prev</button>
-        ${Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-          const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-          return `<button class="page-btn ${p === page ? 'active' : ''}" onclick="jobsChangePage(${p})">${p}</button>`;
-        }).join('')}
-        <button class="page-btn" onclick="jobsChangePage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Next ›</button>
-      </div>
-    </div>
-  `;
-}
-
-function jobsChangePage(p) {
-  jobsState.page = p;
-  loadJobsTable();
 }
 
 async function hideJob(event, jobId) {
   event.stopPropagation();
   try {
     await API.hideJob(jobId);
-    const row = document.querySelector(`#jobsTable tr[data-id="${jobId}"]`);
+    const row = document.querySelector(`.job-row[data-id="${jobId}"]`);
     if (row) {
       row.style.transition = 'opacity .25s, transform .25s';
       row.style.opacity = '0';
@@ -220,8 +196,4 @@ async function hideJob(event, jobId) {
   } catch (err) {
     showToast('Could not hide job: ' + err.message, 'error');
   }
-}
-
-function formatEVLabel(label) {
-  return { core_ev: 'Core EV', likely_ev: 'Likely EV', maybe_ev: 'Maybe EV', non_ev: 'Non-EV' }[label] || label;
 }

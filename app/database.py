@@ -40,6 +40,7 @@ def init_db() -> None:
     from app.models import Base
     Base.metadata.create_all(bind=engine)
     _normalize_locations()
+    _normalize_departments()
     _dedup_jobs()
 
 
@@ -60,6 +61,25 @@ def _normalize_locations() -> None:
         if updated:
             db.commit()
             logger.info(f"Location normalization: updated {updated} job(s)")
+
+
+def _normalize_departments() -> None:
+    """Map all existing department strings to one of the three canonical groups."""
+    from app.models import Job
+    from app.scraper.normalizer import normalize_department
+    from loguru import logger
+    from sqlalchemy import select
+    with SessionLocal() as db:
+        jobs = db.execute(select(Job).where(Job.department.isnot(None))).scalars().all()
+        updated = 0
+        for job in jobs:
+            normalized = normalize_department(job.department)
+            if normalized and normalized != job.department:
+                job.department = normalized
+                updated += 1
+        if updated:
+            db.commit()
+            logger.info(f"Department normalization: updated {updated} job(s)")
 
 
 def _dedup_jobs() -> None:

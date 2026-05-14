@@ -252,6 +252,48 @@ def parse_applicant_count(raw_text: Optional[str]) -> dict:
     return result
 
 
+# ── Department normalization ──────────────────────────────────────────────────
+
+DEPT_ENGINEERING = "Engineering & R&D"
+DEPT_PRODUCT     = "Product & Design"
+DEPT_BUSINESS    = "Business & Operations"
+
+# Ordered rules: first keyword match wins.  Longer / more-specific strings first.
+_DEPT_RULES: list[tuple[list[str], str]] = [
+    ([
+        "engineering", "research", "science",
+        "information technology", "quality assurance",
+        "manufacturing", "technical",
+    ], DEPT_ENGINEERING),
+    ([
+        "product management", "product", "design",
+        "art/creative", "creative", "strategy", "planning",
+        "user experience",
+    ], DEPT_PRODUCT),
+    ([
+        "sales", "marketing", "business development", "business",
+        "operations", "finance", "legal", "human resources",
+        "hr", "administrative", "accounting", "consulting",
+        "supply chain", "purchasing", "management",
+        "customer", "public relations",
+    ], DEPT_BUSINESS),
+]
+
+
+def normalize_department(department: Optional[str]) -> Optional[str]:
+    """
+    Map any LinkedIn job-function string to one of three canonical groups.
+    Returns None when the input is empty.
+    """
+    if not department:
+        return None
+    lower = department.strip().lower()
+    for keywords, group in _DEPT_RULES:
+        if any(kw in lower for kw in keywords):
+            return group
+    return department.strip()  # keep as-is if nothing matched
+
+
 def _parse_int(s: str) -> Optional[int]:
     try:
         return int(s.replace(",", ""))
