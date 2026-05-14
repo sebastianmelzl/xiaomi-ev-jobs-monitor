@@ -18,11 +18,6 @@ async function renderJobs() {
           <option value="missing" ${jobsState.status === 'missing' ? 'selected' : ''}>Missing</option>
           <option value="" ${jobsState.status === '' ? 'selected' : ''}>All statuses</option>
         </select>
-        <select class="filter-select" id="jobEvLabel">
-          <option value="" ${jobsState.evLabel === '' ? 'selected' : ''}>All EV Jobs</option>
-          <option value="core_ev" ${jobsState.evLabel === 'core_ev' ? 'selected' : ''}>Core EV only</option>
-          <option value="likely_ev" ${jobsState.evLabel === 'likely_ev' ? 'selected' : ''}>Likely EV only</option>
-        </select>
         <div class="filters-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">
           ↓ Export CSV
@@ -46,11 +41,6 @@ async function renderJobs() {
   });
   document.getElementById('jobStatus').addEventListener('change', (e) => {
     jobsState.status = e.target.value;
-    jobsState.page = 1;
-    loadJobsTable();
-  });
-  document.getElementById('jobEvLabel').addEventListener('change', (e) => {
-    jobsState.evLabel = e.target.value;
     jobsState.page = 1;
     loadJobsTable();
   });
@@ -94,7 +84,6 @@ async function loadJobsTable() {
         <table class="data-table" id="jobsTable">
           <thead>
             <tr>
-              <th data-col="ev_label">EV Label</th>
               <th data-col="ev_score" class="${jobsState.sortBy === 'ev_score' ? 'sort-' + jobsState.sortDir : ''}">Score</th>
               <th data-col="title">Title</th>
               <th data-col="location">Location</th>
@@ -157,7 +146,6 @@ function jobRow(job) {
 
   return `
     <tr data-id="${job.id}">
-      <td><span class="badge badge-${evLabel.replace('_', '-')}">${formatEVLabel(evLabel)}</span></td>
       <td>
         <div class="score-bar">
           <div class="score-track"><div class="score-fill ${scoreClass}" style="width:${score}%"></div></div>

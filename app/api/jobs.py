@@ -113,7 +113,7 @@ def list_jobs(
         query = query.join(JobEVClassification, Job.id == JobEVClassification.job_id)
         if ev_only:
             query = query.where(
-                JobEVClassification.ev_label.in_([EVLabel.core_ev, EVLabel.likely_ev])
+                JobEVClassification.ev_label == EVLabel.core_ev
             )
         if ev_label:
             try:

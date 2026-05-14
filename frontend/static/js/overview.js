@@ -20,24 +20,19 @@ async function renderOverview() {
     content.innerHTML = `
       <div class="kpi-grid">
         ${kpiCard('Active EV Jobs', overview.ev_jobs_count, 'accent', `As of ${lastUpdate}`)}
-        ${kpiCard('Core EV', overview.ev_label_breakdown.core_ev, 'green', 'confirmed EV relevance')}
-        ${kpiCard('Likely EV', overview.ev_label_breakdown.likely_ev, '', 'high EV signal')}
         ${kpiCard('New (last run)', overview.new_jobs_since_last_run, overview.new_jobs_since_last_run > 0 ? 'accent' : '', '')}
+        ${kpiCard('Missing', overview.missing_jobs_count, overview.missing_jobs_count > 0 ? 'yellow' : '', 'not seen recently')}
         ${kpiCard('Archived', overview.archived_jobs_count, '', 'no longer listed')}
         ${kpiCard('Last Scrape', '', '', formatStatusBadge(overview.last_scrape_status), true)}
       </div>
 
       <div class="chart-grid">
         <div class="chart-card">
-          <div class="chart-title">Core EV vs Likely EV</div>
-          <div class="chart-container" id="chartPie" style="height:200px"></div>
-        </div>
-        <div class="chart-card">
           <div class="chart-title">New EV Jobs per Week</div>
           <div class="chart-container" id="chartWeekly" style="height:200px"></div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">Top EV Locations</div>
+          <div class="chart-title">Top Locations</div>
           <div class="chart-container" id="chartLocations" style="height:200px"></div>
         </div>
         <div class="chart-card">
@@ -65,9 +60,6 @@ async function renderOverview() {
     `;
 
     // Render charts
-    if (overview.ev_label_breakdown) {
-      renderEVLabelPie(document.getElementById('chartPie'), overview.ev_label_breakdown);
-    }
     if (evTime.length > 0) {
       renderEVOverTime(document.getElementById('chartWeekly'), evTime);
     } else {
