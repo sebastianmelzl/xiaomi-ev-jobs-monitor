@@ -277,51 +277,63 @@ _DEPT_FIELD_RULES: list[tuple[list[str], str]] = [
     ], DEPT_BUSINESS),
 ]
 
-# Rules applied to the job title — longer/more-specific phrases first.
-_DEPT_TITLE_RULES: list[tuple[list[str], str]] = [
-    ([
-        # Engineering & R&D title signals
-        "r&d", "research", "researcher", "scientist", "engineer", "engineering",
-        "developer", "architect", "software", "hardware", "firmware", "embedded",
-        "algorithm", "machine learning", "deep learning", "artificial intelligence",
-        "computer vision", "autonomous", "autopilot", "lidar", "radar",
-        "battery", "powertrain", "electric motor", "thermal management",
-        "mechanical", "electrical", "electronic", "simulation", "cfd",
-        "quality assurance", "qa", "test engineer", "testing", "validation",
-        "data scientist", "data engineer", "devops", "sre", "platform engineer",
-        "full stack", "frontend", "backend", "ios", "android", "mobile developer",
-        "cloud engineer", "network engineer", "security engineer", "cybersecurity",
-        "manufacturing engineer", "process engineer", "industrial engineer",
-        "technical lead", "tech lead", "staff engineer", "principal engineer",
-    ], DEPT_ENGINEERING),
-    ([
-        # Product & Design title signals
-        "product manager", "product owner", "product lead", "product director",
-        "ux", "ui ", "ui/ux", "user experience", "user interface",
-        "interaction design", "visual design", "graphic design",
-        "brand design", "brand manager", "brand director",
-        "creative director", "art director", "motion design",
-        "industrial design", "industrial designer",
-    ], DEPT_PRODUCT),
-    ([
-        # Business & Operations title signals
-        "sales", "account manager", "account executive", "sales manager",
-        "business development", "bd manager", "bd director",
-        "marketing manager", "marketing director", "marketing specialist",
-        "growth", "demand generation", "campaign manager",
-        "finance", "financial", "controller", "accountant", "treasury",
-        "legal", "counsel", "compliance", "regulatory",
-        "hr ", "human resources", "recruiter", "recruiting", "talent",
-        "people partner", "hrbp",
-        "operations manager", "operations director", "biz ops",
-        "supply chain", "logistics", "procurement", "purchasing",
-        "project manager", "program manager",
-        "communications", "public relations", "pr manager",
-        "strategy", "strategic", "business analyst",
-        "customer success", "customer experience", "customer service",
-        "content", "copywriter", "social media",
-        "general manager", "managing director",
-    ], DEPT_BUSINESS),
+# Title keywords that ALWAYS mean Product & Design — checked before Engineering.
+# These are job *role* words (designer, creative director, …).  An "engineer"
+# suffix overrides them (e.g. "Design Engineer" stays Engineering).
+_PRODUCT_PRIORITY_KEYWORDS = [
+    "designer",
+    "design lead", "design director", "design manager", "design head",
+    "head of design", "vp design", "vp of design",
+    "ux ", "ui ", "ui/ux", "user experience", "user interface",
+    "interaction design", "visual design", "graphic design",
+    "industrial design", "motion design", "brand design",
+    "product manager", "product owner", "product lead", "product director",
+    "creative director", "art director",
+    "brand manager", "brand director",
+]
+
+# If any of these appear in the title the role is Engineering, period.
+_ENGINEERING_OVERRIDE_KEYWORDS = [
+    "engineer", "engineering", "developer", "scientist", "researcher",
+]
+
+# Business title signals — checked last.
+_BUSINESS_TITLE_KEYWORDS = [
+    "sales", "account manager", "account executive", "sales manager",
+    "business development", "bd manager", "bd director",
+    "marketing manager", "marketing director", "marketing specialist",
+    "growth", "demand generation", "campaign manager",
+    "finance", "financial", "controller", "accountant", "treasury",
+    "legal", "counsel", "compliance", "regulatory",
+    "hr ", "human resources", "recruiter", "recruiting", "talent acquisition",
+    "people partner", "hrbp",
+    "operations manager", "operations director", "biz ops",
+    "supply chain", "logistics", "procurement", "purchasing",
+    "project manager", "program manager",
+    "communications", "public relations", "pr manager",
+    "strategy", "strategic", "business analyst",
+    "customer success", "customer experience", "customer service",
+    "content", "copywriter", "social media",
+    "general manager", "managing director",
+    "go-to-market", "go to market", "gtm",
+    "commercial", "partnerships", "partner manager",
+    "brand campaign", "regional manager", "country manager",
+]
+
+# Engineering title signals — fallback after Product priority check.
+_ENGINEERING_TITLE_KEYWORDS = [
+    "r&d", "research", "researcher", "scientist", "engineer", "engineering",
+    "developer", "architect", "software", "hardware", "firmware", "embedded",
+    "algorithm", "machine learning", "deep learning", "artificial intelligence",
+    "computer vision", "autonomous", "autopilot", "lidar", "radar",
+    "battery", "powertrain", "electric motor", "thermal management",
+    "mechanical", "electrical", "electronic", "simulation", "cfd",
+    "quality assurance", "qa", "test engineer", "testing", "validation",
+    "data scientist", "data engineer", "devops", "sre", "platform engineer",
+    "full stack", "frontend", "backend", "ios", "android", "mobile developer",
+    "cloud engineer", "network engineer", "security engineer", "cybersecurity",
+    "manufacturing engineer", "process engineer", "industrial engineer",
+    "technical lead", "tech lead", "staff engineer", "principal engineer",
 ]
 
 
@@ -342,17 +354,30 @@ def normalize_department(department: Optional[str]) -> Optional[str]:
 
 def classify_department(title: Optional[str], department: Optional[str]) -> Optional[str]:
     """
-    Determine the canonical department using both the LinkedIn field and the
-    job title.  Title takes priority when it produces a confident match,
-    otherwise the field result is used.
+    Classify into one of three canonical departments using title + LinkedIn field.
+
+    Priority order:
+    1. Title contains a Product/Design ROLE keyword AND no engineering override
+       → Product & Design
+    2. Title contains an Engineering keyword → Engineering & R&D
+    3. Title contains a Business keyword → Business & Operations
+    4. Fall back to LinkedIn field result
     """
     field_result = normalize_department(department)
-    title_result = _match_rules(title or "", _DEPT_TITLE_RULES)
+    t = (title or "").strip().lower()
 
-    # If title gives a clear signal, prefer it
-    if title_result:
-        return title_result
-    # Otherwise fall back to the field result (may be None)
+    has_eng_override = any(kw in t for kw in _ENGINEERING_OVERRIDE_KEYWORDS)
+    has_product_role = any(kw in t for kw in _PRODUCT_PRIORITY_KEYWORDS)
+
+    if has_product_role and not has_eng_override:
+        return DEPT_PRODUCT
+
+    if any(kw in t for kw in _ENGINEERING_TITLE_KEYWORDS):
+        return DEPT_ENGINEERING
+
+    if any(kw in t for kw in _BUSINESS_TITLE_KEYWORDS):
+        return DEPT_BUSINESS
+
     return field_result
 
 
