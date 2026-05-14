@@ -136,16 +136,9 @@ class LinkedInScraper:
                 elif "function" in lbl or "department" in lbl:
                     job["department"] = val
 
-            # Repost detection from detail page (time element or top-card text)
-            detail_time = soup.find("time")
-            if detail_time:
-                detail_time_text = detail_time.get_text(" ", strip=True)
-                if _is_repost_text(detail_time_text):
-                    job["is_reposted"] = True
-            if not job.get("is_reposted"):
-                top_card = soup.find(class_=re.compile(r"top-card|primary-description|posted-time"))
-                if top_card and _is_repost_text(top_card.get_text(" ", strip=True)):
-                    job["is_reposted"] = True
+            # Repost detection: scan raw response text for any repost phrase
+            if not job.get("is_reposted") and _is_repost_text(resp.text):
+                job["is_reposted"] = True
 
             count_el = (
                 soup.find("figcaption", class_=re.compile(r"num-applicants"))
