@@ -108,9 +108,7 @@ async function openJobModal(jobId) {
       ${job.description_text ? `
         <div class="section" style="margin-bottom:16px">
           <div class="section-header"><span class="section-title">Job Description</span></div>
-          <div class="section-body">
-            <div class="description-box">${escHtml(job.description_text)}</div>
-          </div>
+          <div class="desc-body">${formatDescription(job.description_text)}</div>
         </div>
       ` : ''}
 
@@ -175,3 +173,62 @@ function formatEVLabelFull(label) {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeJobModal();
 });
+
+/* ── Description formatter ───────────────────────────────────────────────── */
+const _BULLET_RE   = /^[•·▪◦✓✔*\-–—]\s+(.+)/;
+const _NUMBERED_RE = /^(\d+)[.)]\s+(.+)/;
+
+function formatDescription(text) {
+  if (!text) return '';
+
+  const lines = text.split('\n').map(l => l.trim());
+  const out = [];
+  const bullets = [];
+
+  function flushBullets() {
+    if (!bullets.length) return;
+    out.push(`<ul class="desc-list">${bullets.map(b => `<li>${escHtml(b)}</li>`).join('')}</ul>`);
+    bullets.length = 0;
+  }
+
+  function isHeading(line, nextLines) {
+    if (!line || line.length > 120) return false;
+    // Ends with colon
+    if (line.endsWith(':')) return true;
+    // ALL CAPS (and contains at least one letter)
+    if (line === line.toUpperCase() && /[A-Z]/.test(line) && line.length >= 3) return true;
+    // Short line immediately followed by a bullet list
+    if (line.length < 80) {
+      for (const nl of nextLines.slice(0, 4)) {
+        if (!nl) continue;
+        if (_BULLET_RE.test(nl) || _NUMBERED_RE.test(nl)) return true;
+        break;
+      }
+    }
+    return false;
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!line) { flushBullets(); continue; }
+
+    // Bullet / numbered list item
+    const bm = _BULLET_RE.exec(line);
+    if (bm) { bullets.push(bm[1]); continue; }
+    const nm = _NUMBERED_RE.exec(line);
+    // Guard: "3+ years" is NOT a numbered list item
+    if (nm && !line.match(/^\d+[+\-]?\s*\w/)) { bullets.push(nm[2]); continue; }
+
+    flushBullets();
+
+    if (isHeading(line, lines.slice(i + 1))) {
+      out.push(`<div class="desc-heading">${escHtml(line.replace(/:$/, ''))}</div>`);
+    } else {
+      out.push(`<p class="desc-para">${escHtml(line)}</p>`);
+    }
+  }
+
+  flushBullets();
+  return out.join('');
+}
