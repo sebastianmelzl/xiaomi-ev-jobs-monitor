@@ -64,7 +64,8 @@ class ScrapeRunner:
         log_buffer.init_run(run.id)
         _log(run.id, "INFO", f"Run #{run.id} started — {len(sources)} sources")
 
-        seen_canonical_keys: List[str] = []
+        seen_canonical_keys: set = set()
+        seen_this_run: set = set()  # dedup across sources within one run
         total_inserted = 0
         total_updated = 0
         total_errors = 0
@@ -78,10 +79,22 @@ class ScrapeRunner:
                             source=source,
                             company=source.get("company", "Xiaomi"),
                         )
-                        _log(run.id, "INFO", f"  Found {len(raw_jobs)} jobs")
+                        unique_jobs = [
+                            j for j in raw_jobs
+                            if j.get("canonical_job_key") not in seen_this_run
+                        ]
+                        dupes = len(raw_jobs) - len(unique_jobs)
+                        msg = f"  Found {len(raw_jobs)} jobs"
+                        if dupes:
+                            msg += f" ({dupes} already seen this run, skipped)"
+                        _log(run.id, "INFO", msg)
 
-                        for raw_job in raw_jobs:
+                        for raw_job in unique_jobs:
                             try:
+                                key = raw_job.get("canonical_job_key")
+                                if key:
+                                    seen_this_run.add(key)
+
                                 if enrich_details and raw_job.get("canonical_url"):
                                     raw_job = scraper.enrich_job_details(raw_job)
 
@@ -96,7 +109,7 @@ class ScrapeRunner:
                                     total_updated += 1
 
                                 if result.get("canonical_key"):
-                                    seen_canonical_keys.append(result["canonical_key"])
+                                    seen_canonical_keys.add(result["canonical_key"])
 
                                 run.jobs_seen_count += 1
                                 self.db.commit()

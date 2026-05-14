@@ -8,7 +8,7 @@ Algorithm per run:
 """
 import os
 from datetime import datetime
-from typing import List
+from typing import Collection
 from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -26,7 +26,7 @@ class ArchiveManager:
     def process_missing(
         self,
         run_id: int,
-        seen_canonical_keys: List[str],
+        seen_canonical_keys: Collection[str],
     ) -> int:
         """
         After a scrape run completes, mark unseen active/missing jobs.
