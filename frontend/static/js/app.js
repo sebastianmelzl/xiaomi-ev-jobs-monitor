@@ -77,36 +77,118 @@ async function triggerScrape() {
   }
 }
 
-// ── Scrape status polling ──────────────────────────────────────────────────────
+// ── Scrape status + live panel ────────────────────────────────────────────────
 
 let _statusInterval = null;
-
 let _lastKnownRunId = null;
+let _slpExpanded = false;
+let _slpLastLogCount = 0;
+
+function slpToggle() {
+  _slpExpanded = !_slpExpanded;
+  document.getElementById('slpLog').style.display = _slpExpanded ? 'block' : 'none';
+  document.getElementById('slpChevron').classList.toggle('open', _slpExpanded);
+}
+
+function _slpShow(runId) {
+  const panel = document.getElementById('scrapeLivePanel');
+  panel.style.display = 'block';
+  document.getElementById('slpRunLabel').textContent = `Run #${runId}`;
+  document.getElementById('slpSpinner').className = 'slp-spinner';
+}
+
+function _slpHide() {
+  setTimeout(() => {
+    document.getElementById('scrapeLivePanel').style.display = 'none';
+    document.getElementById('slpLog').innerHTML = '';
+    _slpLastLogCount = 0;
+    _slpExpanded = false;
+    document.getElementById('slpChevron').classList.remove('open');
+  }, 4000);
+}
+
+function _slpSetStatus(text, state = 'running') {
+  document.getElementById('slpStatusText').textContent = text;
+  const spinner = document.getElementById('slpSpinner');
+  spinner.className = 'slp-spinner' + (state !== 'running' ? ' ' + state : '');
+  spinner.textContent = state === 'done' ? '✓' : state === 'error' ? '✗' : '⟳';
+}
+
+function _slpAppendLogs(logs) {
+  if (logs.length <= _slpLastLogCount) return;
+  const container = document.getElementById('slpLog');
+  const newEntries = logs.slice(_slpLastLogCount);
+  newEntries.forEach(entry => {
+    const line = document.createElement('div');
+    line.className = `log-line log-${entry.level.toLowerCase()}`;
+    line.innerHTML =
+      `<span class="log-ts">${entry.ts.slice(11, 19)}</span>` +
+      ` <span class="log-lvl">${entry.level}</span>` +
+      ` ${escHtml(entry.msg)}`;
+    container.appendChild(line);
+    // Show latest message in the bar
+    _slpSetStatus(entry.msg);
+  });
+  container.scrollTop = container.scrollHeight;
+  _slpLastLogCount = logs.length;
+}
 
 async function pollScrapeStatus() {
   const dot = document.getElementById('scrapeStatusDot');
   try {
     const s = await API.scrapeStatus();
+
     if (s.is_running) {
       dot.className = 'scrape-status-dot running';
-      dot.title = `Scrape running (run #${s.active_run_id})`;
-      if (!_statusInterval) {
-        _statusInterval = setInterval(pollScrapeStatus, 5000);
-      }
-      // If runs page is open and a new run just started, re-render it to show live log
-      const hash = window.location.hash.replace('#', '') || '/';
-      if (hash === '/runs' && s.active_run_id !== _lastKnownRunId) {
+      dot.title = `Scraping… run #${s.active_run_id}`;
+
+      // Show panel on first detection
+      if (s.active_run_id !== _lastKnownRunId) {
         _lastKnownRunId = s.active_run_id;
-        renderRuns();
+        _slpLastLogCount = 0;
+        _slpShow(s.active_run_id);
+
+        // Re-render runs page if open
+        const hash = window.location.hash.replace('#', '') || '/';
+        if (hash === '/runs') renderRuns();
       }
+
+      // Fetch and stream logs into panel
+      try {
+        const logData = await API.runLogs(s.active_run_id);
+        _slpAppendLogs(logData.logs || []);
+      } catch (_) {}
+
+      // Fast polling while running
+      if (!_statusInterval) {
+        _statusInterval = setInterval(pollScrapeStatus, 2000);
+      }
+
     } else {
       dot.className = 'scrape-status-dot';
       dot.title = 'Idle';
+
       if (_statusInterval) {
         clearInterval(_statusInterval);
         _statusInterval = null;
       }
-      _lastKnownRunId = null;
+
+      // If we were tracking a run, show completion
+      if (_lastKnownRunId !== null) {
+        try {
+          const logData = await API.runLogs(_lastKnownRunId);
+          _slpAppendLogs(logData.logs || []);
+        } catch (_) {}
+        _slpSetStatus('Scrape completed', 'done');
+        _slpHide();
+        _lastKnownRunId = null;
+
+        // Refresh current page data
+        const hash = window.location.hash.replace('#', '') || '/';
+        if (hash === '/' || hash === '') renderOverview();
+        else if (hash === '/jobs') loadJobsTable?.();
+        else if (hash === '/runs') renderRuns();
+      }
     }
   } catch {
     dot.className = 'scrape-status-dot error';
