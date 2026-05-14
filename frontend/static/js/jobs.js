@@ -19,10 +19,9 @@ async function renderJobs() {
           <option value="" ${jobsState.status === '' ? 'selected' : ''}>All statuses</option>
         </select>
         <select class="filter-select" id="jobEvLabel">
-          <option value="" ${jobsState.evLabel === '' ? 'selected' : ''}>All EV labels</option>
-          <option value="core_ev" ${jobsState.evLabel === 'core_ev' ? 'selected' : ''}>Core EV</option>
-          <option value="likely_ev" ${jobsState.evLabel === 'likely_ev' ? 'selected' : ''}>Likely EV</option>
-          <option value="maybe_ev" ${jobsState.evLabel === 'maybe_ev' ? 'selected' : ''}>Maybe EV</option>
+          <option value="" ${jobsState.evLabel === '' ? 'selected' : ''}>All EV Jobs</option>
+          <option value="core_ev" ${jobsState.evLabel === 'core_ev' ? 'selected' : ''}>Core EV only</option>
+          <option value="likely_ev" ${jobsState.evLabel === 'likely_ev' ? 'selected' : ''}>Likely EV only</option>
         </select>
         <div class="filters-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">
@@ -144,7 +143,7 @@ async function loadJobsTable() {
 function jobRow(job) {
   const evLabel = job.ev_label || 'non_ev';
   const score = job.ev_score ?? 0;
-  const scoreClass = score >= 60 ? 'high' : score >= 35 ? 'mid' : score >= 15 ? 'low' : 'none';
+  const scoreClass = score >= 60 ? 'high' : 'mid';
 
   const applicants = job.applicant_count_current;
   const applicantDisplay = applicants != null

@@ -57,7 +57,6 @@ function renderEVLabelPie(el, breakdown) {
   const data = [
     { name: 'Core EV', value: breakdown.core_ev, itemStyle: { color: EV_COLORS.core_ev } },
     { name: 'Likely EV', value: breakdown.likely_ev, itemStyle: { color: EV_COLORS.likely_ev } },
-    { name: 'Maybe EV', value: breakdown.maybe_ev, itemStyle: { color: EV_COLORS.maybe_ev } },
   ].filter(d => d.value > 0);
 
   return makeChart(el, {

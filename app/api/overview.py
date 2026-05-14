@@ -25,7 +25,7 @@ def get_overview(db: Session = Depends(get_db)):
         .join(JobEVClassification, Job.id == JobEVClassification.job_id)
         .where(
             Job.status == JobStatus.active,
-            JobEVClassification.ev_label.in_([EVLabel.core_ev, EVLabel.likely_ev, EVLabel.maybe_ev]),
+            JobEVClassification.ev_label.in_([EVLabel.core_ev, EVLabel.likely_ev]),
         )
     ).scalar_one()
 
@@ -69,7 +69,7 @@ def get_overview(db: Session = Depends(get_db)):
         elif label == EVLabel.likely_ev:
             breakdown.likely_ev = count
         elif label == EVLabel.maybe_ev:
-            breakdown.maybe_ev = count
+            pass  # not shown
         elif label == EVLabel.non_ev:
             breakdown.non_ev = count
 
@@ -80,7 +80,7 @@ def get_overview(db: Session = Depends(get_db)):
         .where(
             Job.status == JobStatus.active,
             Job.location.isnot(None),
-            JobEVClassification.ev_label.in_([EVLabel.core_ev, EVLabel.likely_ev]),
+            JobEVClassification.ev_label.in_([EVLabel.core_ev, EVLabel.likely_ev]),  # already correct
         )
         .group_by(Job.location)
         .order_by(desc("cnt"))

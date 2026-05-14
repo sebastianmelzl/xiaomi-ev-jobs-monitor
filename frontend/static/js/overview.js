@@ -19,17 +19,17 @@ async function renderOverview() {
 
     content.innerHTML = `
       <div class="kpi-grid">
-        ${kpiCard('EV Jobs (active)', overview.ev_jobs_count, 'accent', `As of ${lastUpdate}`)}
-        ${kpiCard('Total Active', overview.active_jobs_count, '', 'incl. unclassified')}
+        ${kpiCard('Active EV Jobs', overview.ev_jobs_count, 'accent', `As of ${lastUpdate}`)}
+        ${kpiCard('Core EV', overview.ev_label_breakdown.core_ev, 'green', 'confirmed EV relevance')}
+        ${kpiCard('Likely EV', overview.ev_label_breakdown.likely_ev, '', 'high EV signal')}
         ${kpiCard('New (last run)', overview.new_jobs_since_last_run, overview.new_jobs_since_last_run > 0 ? 'accent' : '', '')}
-        ${kpiCard('Missing', overview.missing_jobs_count, overview.missing_jobs_count > 0 ? 'yellow' : '', 'below archive threshold')}
-        ${kpiCard('Archived', overview.archived_jobs_count, '', 'threshold reached')}
+        ${kpiCard('Archived', overview.archived_jobs_count, '', 'no longer listed')}
         ${kpiCard('Last Scrape', '', '', formatStatusBadge(overview.last_scrape_status), true)}
       </div>
 
       <div class="chart-grid">
         <div class="chart-card">
-          <div class="chart-title">EV Jobs by Label</div>
+          <div class="chart-title">Core EV vs Likely EV</div>
           <div class="chart-container" id="chartPie" style="height:200px"></div>
         </div>
         <div class="chart-card">
@@ -48,15 +48,18 @@ async function renderOverview() {
 
       <div class="section">
         <div class="section-header">
-          <span class="section-title">EV Label Breakdown</span>
+          <span class="section-title">Top EV Locations</span>
           <a href="#/jobs" class="btn btn-ghost btn-sm">View all jobs →</a>
         </div>
-        <div class="section-body">
-          <div style="display:flex;gap:24px;flex-wrap:wrap">
-            ${evLabelStat('Core EV', overview.ev_label_breakdown.core_ev, 'core-ev')}
-            ${evLabelStat('Likely EV', overview.ev_label_breakdown.likely_ev, 'likely-ev')}
-            ${evLabelStat('Maybe EV', overview.ev_label_breakdown.maybe_ev, 'maybe-ev')}
-          </div>
+        <div class="section-body" id="topLocationsTable">
+          ${overview.top_locations.length
+            ? overview.top_locations.map(l =>
+                `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+                  <span>${escHtml(l.location)}</span>
+                  <span class="badge badge-core-ev">${l.count}</span>
+                </div>`
+              ).join('')
+            : '<p class="text-muted">No location data yet</p>'}
         </div>
       </div>
     `;
