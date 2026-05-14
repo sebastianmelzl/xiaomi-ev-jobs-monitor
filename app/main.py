@@ -19,7 +19,7 @@ logger.add(LOG_DIR / "scraper.log", rotation="10 MB", retention="30 days", level
            filter=lambda r: "scraper" in r["name"] or "linkedin" in r["name"])
 
 from app.database import init_db
-from app.api import overview, jobs, archive, scrape, export, charts
+from app.api import overview, jobs, archive, scrape, export, charts, admin
 from app.scheduler.scheduler import start_scheduler, stop_scheduler
 
 
@@ -48,7 +48,7 @@ app.add_middleware(
 )
 
 # API routers
-for api_router in [overview.router, jobs.router, archive.router, scrape.router, export.router, charts.router]:
+for api_router in [overview.router, jobs.router, archive.router, scrape.router, export.router, charts.router, admin.router]:
     app.include_router(api_router, prefix="/api")
 
 # Static files

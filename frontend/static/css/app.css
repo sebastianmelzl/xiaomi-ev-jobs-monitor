@@ -1215,3 +1215,96 @@ body:has(.sidebar.collapsed) .slp { left: var(--sidebar-collapsed-width); }
 .slp-log .log-info .log-lvl { color: var(--accent); }
 .slp-log .log-error .log-lvl { color: var(--red); }
 .slp-log .log-warning .log-lvl { color: var(--yellow); }
+
+/* ── Danger Zone ────────────────────────────────────────────────────────────── */
+.danger-zone {
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  background: rgba(239, 68, 68, 0.04) !important;
+}
+.danger-title { color: var(--red) !important; }
+.danger-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 18px;
+}
+.danger-action-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.danger-action-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 520px;
+}
+
+/* ── Danger button ──────────────────────────────────────────────────────────── */
+.btn-danger {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: 1px solid var(--red);
+  background: var(--red-soft);
+  color: var(--red);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.btn-danger:hover {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Reset confirmation overlay ─────────────────────────────────────────────── */
+.reset-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(3px);
+}
+.reset-dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 32px 28px 24px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+.reset-dialog-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+.reset-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+.reset-dialog-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+.reset-dialog-body strong { color: var(--text-primary); }
+.reset-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}

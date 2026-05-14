@@ -42,4 +42,5 @@ const API = {
   chartsScoreDistribution: () => apiFetch('/charts/ev-score-distribution'),
   chartsJobsByDepartment: () => apiFetch('/charts/jobs-by-department'),
   exportEVJobs: () => window.open('/api/export/ev-jobs.csv', '_blank'),
+  resetAllData: () => apiFetch('/admin/reset', { method: 'POST' }),
 };

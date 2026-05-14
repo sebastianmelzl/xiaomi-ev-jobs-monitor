@@ -109,6 +109,22 @@ async function renderSettings() {
         <div id="hiddenJobsContent">${loadingHtml()}</div>
       </div>
 
+      <!-- Danger zone -->
+      <div class="settings-section danger-zone">
+        <div class="section-header">
+          <span class="section-title danger-title">Danger Zone</span>
+        </div>
+        <div class="section-body">
+          <div class="danger-row">
+            <div>
+              <div class="danger-action-title">Reset all data</div>
+              <div class="danger-action-sub">Deletes all scraped jobs, scrape history, and applicant data. Config files and scrape sources are kept. Use this to start completely fresh.</div>
+            </div>
+            <button class="btn btn-danger" onclick="confirmReset()">Reset Database</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Legal notice -->
       <div class="settings-section">
         <div class="section-header"><span class="section-title">⚠️ Legal & Compliance</span></div>
@@ -181,6 +197,45 @@ async function unhideJob(jobId) {
     showToast('Job unhidden — will reappear in EV Jobs list', 'success');
   } catch (err) {
     showToast('Could not unhide: ' + err.message, 'error');
+  }
+}
+
+function confirmReset() {
+  const overlay = document.createElement('div');
+  overlay.className = 'reset-overlay';
+  overlay.innerHTML = `
+    <div class="reset-dialog">
+      <div class="reset-dialog-icon">⚠️</div>
+      <div class="reset-dialog-title">Reset all data?</div>
+      <div class="reset-dialog-body">
+        This will permanently delete all scraped jobs, scrape runs, and applicant history.
+        Your config files and scrape sources will not be affected.
+        <br><br>
+        <strong>This cannot be undone.</strong>
+      </div>
+      <div class="reset-dialog-actions">
+        <button class="btn btn-secondary" onclick="this.closest('.reset-overlay').remove()">Cancel</button>
+        <button class="btn btn-danger" id="confirmResetBtn" onclick="executeReset(this)">Yes, delete everything</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function executeReset(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    const result = await API.resetAllData();
+    document.querySelector('.reset-overlay')?.remove();
+    showToast(`Database reset — ${result.total_rows} rows deleted. Ready for a fresh scrape.`, 'success');
+    // Reload overview after short delay
+    setTimeout(() => { window.location.hash = '#/'; router(); }, 1200);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Yes, delete everything';
+    showToast('Reset failed: ' + err.message, 'error');
   }
 }
 
