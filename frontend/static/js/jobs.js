@@ -107,6 +107,7 @@ async function loadJobsTable() {
               <th data-col="delta_24h">24h Δ</th>
               <th data-col="status">Status</th>
               <th data-col="first_seen_at" class="${jobsState.sortBy === 'first_seen_at' ? 'sort-' + jobsState.sortDir : ''}">First Seen</th>
+              <th style="width:32px"></th>
             </tr>
           </thead>
           <tbody>
@@ -174,6 +175,7 @@ function jobRow(job) {
       <td>${deltaHtml}</td>
       <td><span class="badge badge-${job.status}">${job.status}</span></td>
       <td class="text-muted">${formatDate(job.first_seen_at)}</td>
+      <td><button class="hide-job-btn" title="Permanently hide this job" onclick="hideJob(event, ${job.id})">✕</button></td>
     </tr>
   `;
 }
@@ -201,6 +203,23 @@ function paginationHtml(total, page, pageSize) {
 function jobsChangePage(p) {
   jobsState.page = p;
   loadJobsTable();
+}
+
+async function hideJob(event, jobId) {
+  event.stopPropagation();
+  try {
+    await API.hideJob(jobId);
+    const row = document.querySelector(`#jobsTable tr[data-id="${jobId}"]`);
+    if (row) {
+      row.style.transition = 'opacity .25s, transform .25s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(12px)';
+      setTimeout(() => row.remove(), 260);
+    }
+    showToast('Job hidden — manage in Settings', 'info');
+  } catch (err) {
+    showToast('Could not hide job: ' + err.message, 'error');
+  }
 }
 
 function formatEVLabel(label) {

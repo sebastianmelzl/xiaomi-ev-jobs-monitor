@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, not_
 from typing import Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.models import Job, JobEVClassification, ScrapeRun, JobStatus, EVLabel, RunStatus
+from app.models import Job, JobEVClassification, HiddenJob, ScrapeRun, JobStatus, EVLabel, RunStatus
 from app.schemas import OverviewResponse, EVLabelBreakdown, TopLocation
 
 router = APIRouter()
@@ -19,6 +19,7 @@ def get_overview(db: Session = Depends(get_db)):
     ).scalar_one()
 
     # EV-relevant jobs (core + likely + maybe), active only
+    hidden_ids = select(HiddenJob.job_id).scalar_subquery()
     ev_count = db.execute(
         select(func.count())
         .select_from(Job)
@@ -26,6 +27,7 @@ def get_overview(db: Session = Depends(get_db)):
         .where(
             Job.status == JobStatus.active,
             JobEVClassification.ev_label == EVLabel.core_ev,
+            not_(Job.id.in_(hidden_ids)),
         )
     ).scalar_one()
 

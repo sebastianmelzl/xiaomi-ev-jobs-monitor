@@ -100,6 +100,15 @@ async function renderSettings() {
         </div>
       </div>
 
+      <!-- Hidden jobs -->
+      <div class="settings-section">
+        <div class="section-header">
+          <span class="section-title">Hidden Jobs</span>
+          <span style="font-size:12px;color:var(--text-muted)">Jobs you permanently dismissed</span>
+        </div>
+        <div id="hiddenJobsContent">${loadingHtml()}</div>
+      </div>
+
       <!-- Legal notice -->
       <div class="settings-section">
         <div class="section-header"><span class="section-title">⚠️ Legal & Compliance</span></div>
@@ -115,6 +124,32 @@ async function renderSettings() {
         </div>
       </div>
     `;
+
+    // Load hidden jobs
+    API.hiddenJobs().then(jobs => {
+      const el = document.getElementById('hiddenJobsContent');
+      if (!el) return;
+      if (jobs.length === 0) {
+        el.innerHTML = '<div class="section-body"><p class="text-muted" style="font-size:13px">No hidden jobs.</p></div>';
+        return;
+      }
+      el.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:6px;padding:12px 0">
+          ${jobs.map(j => `
+            <div class="hidden-job-row" id="hjr-${j.job_id}">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:500">${escHtml(j.title || '–')}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${escHtml(j.department || '')}${j.department && j.location ? ' · ' : ''}${escHtml(j.location || '')}</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="unhideJob(${j.job_id})">Unhide</button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }).catch(() => {
+      const el = document.getElementById('hiddenJobsContent');
+      if (el) el.innerHTML = '<div class="section-body"><p class="text-muted">Could not load hidden jobs.</p></div>';
+    });
 
     // Load sources from API
     fetch('/api/health').then(() => {
@@ -135,6 +170,17 @@ async function renderSettings() {
 
   } catch (err) {
     content.innerHTML = errorHtml(err.message);
+  }
+}
+
+async function unhideJob(jobId) {
+  try {
+    await API.unhideJob(jobId);
+    const row = document.getElementById(`hjr-${jobId}`);
+    if (row) row.remove();
+    showToast('Job unhidden — will reappear in EV Jobs list', 'success');
+  } catch (err) {
+    showToast('Could not unhide: ' + err.message, 'error');
   }
 }
 

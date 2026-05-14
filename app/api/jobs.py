@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import select, func, desc, asc, or_
+from sqlalchemy import select, func, desc, asc, or_, not_
 from typing import Optional, List
+from datetime import datetime
 from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.models import (
     Job, JobEVClassification, ApplicantHistory, JobChangeLog,
-    JobStatus, EVLabel, ApplicantQuality
+    HiddenJob, JobStatus, EVLabel, ApplicantQuality
 )
 from app.schemas import PaginatedJobs, JobListItem, JobDetail, ApplicantHistoryPoint, ChangeLogEntry
 
@@ -112,12 +113,14 @@ def list_jobs(
     sort_dir: str = Query("asc"),
     db: Session = Depends(get_db),
 ):
+    hidden_ids = select(HiddenJob.job_id).scalar_subquery()
     query = (
         select(Job)
         .options(
             selectinload(Job.ev_classification),
             selectinload(Job.applicant_history),
         )
+        .where(not_(Job.id.in_(hidden_ids)))
     )
 
     # Filters
@@ -213,3 +216,47 @@ def get_job_changes(job_id: int, db: Session = Depends(get_db)):
         .order_by(desc(JobChangeLog.changed_at))
     ).scalars().all()
     return [ChangeLogEntry.model_validate(r) for r in rows]
+
+
+# ── Hide / unhide ─────────────────────────────────────────────────────────────
+
+@router.post("/jobs/{job_id}/hide")
+def hide_job(job_id: int, db: Session = Depends(get_db)):
+    job = db.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    existing = db.execute(select(HiddenJob).where(HiddenJob.job_id == job_id)).scalar_one_or_none()
+    if not existing:
+        db.add(HiddenJob(job_id=job_id, hidden_at=datetime.utcnow()))
+        db.commit()
+    return {"hidden": True, "job_id": job_id}
+
+
+@router.delete("/jobs/{job_id}/hide")
+def unhide_job(job_id: int, db: Session = Depends(get_db)):
+    row = db.execute(select(HiddenJob).where(HiddenJob.job_id == job_id)).scalar_one_or_none()
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"hidden": False, "job_id": job_id}
+
+
+@router.get("/jobs/hidden")
+def list_hidden_jobs(db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(HiddenJob, Job)
+        .join(Job, Job.id == HiddenJob.job_id)
+        .order_by(desc(HiddenJob.hidden_at))
+    ).all()
+    return [
+        {
+            "job_id": h.job_id,
+            "hidden_at": h.hidden_at.isoformat(),
+            "title": j.title,
+            "company": j.company_name,
+            "location": j.location,
+            "department": j.department,
+            "job_url": j.job_url,
+        }
+        for h, j in rows
+    ]

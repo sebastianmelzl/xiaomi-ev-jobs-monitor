@@ -180,6 +180,18 @@ class JobRunPresence(Base):
     )
 
 
+class HiddenJob(Base):
+    """Jobs permanently dismissed by the user from the EV dashboard."""
+    __tablename__ = "hidden_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), unique=True, nullable=False)
+    hidden_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    reason = Column(String(255), nullable=True)
+
+    job = relationship("Job")
+
+
 class JobChangeLog(Base):
     __tablename__ = "job_change_log"
 

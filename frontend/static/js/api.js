@@ -24,6 +24,9 @@ const API = {
   runs: (limit = 50) => apiFetch(`/scrape/runs?limit=${limit}`),
   run: (id) => apiFetch(`/scrape/runs/${id}`),
   runLogs: (id) => apiFetch(`/scrape/runs/${id}/logs`),
+  hideJob: (id) => apiFetch(`/jobs/${id}/hide`, { method: 'POST' }),
+  unhideJob: (id) => apiFetch(`/jobs/${id}/hide`, { method: 'DELETE' }),
+  hiddenJobs: () => apiFetch('/jobs/hidden'),
   scrapeStatus: () => apiFetch('/scrape/status'),
   triggerScrape: (sourceNames = null) => apiFetch('/scrape/run', {
     method: 'POST',
