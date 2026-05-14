@@ -2,10 +2,10 @@
 Scrape run orchestrator.
 Coordinates scraping, classification, persistence, and archiving for a single run.
 """
-import asyncio
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from loguru import logger
+from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Session
 
 from app.scraper.linkedin import LinkedInScraper
@@ -29,7 +29,7 @@ class ScrapeRunner:
         self.archive = ArchiveManager(db)
         self.classifier = EVClassifier()
 
-    async def run(
+    def run(
         self,
         source_names: Optional[List[str]] = None,
         enrich_details: bool = True,
@@ -42,19 +42,18 @@ class ScrapeRunner:
             sources = [s for s in sources if s.get("enabled", True)]
 
         if existing_run_id:
-            from sqlalchemy import select as sa_select
             run = self.db.execute(
                 sa_select(ScrapeRun).where(ScrapeRun.id == existing_run_id)
             ).scalar_one()
             run.source_name = ",".join(s["name"] for s in sources)
-            run.source_url = ";".join(s["url"] for s in sources)
+            run.source_url = ";".join(s.get("url", "") for s in sources)
             run.started_at = datetime.utcnow()
             run.status = RunStatus.running
             self.db.commit()
         else:
             run = ScrapeRun(
                 source_name=",".join(s["name"] for s in sources),
-                source_url=";".join(s["url"] for s in sources),
+                source_url=";".join(s.get("url", "") for s in sources),
                 started_at=datetime.utcnow(),
                 status=RunStatus.running,
             )
@@ -71,22 +70,20 @@ class ScrapeRunner:
         total_errors = 0
 
         try:
-            async with LinkedInScraper() as scraper:
+            with LinkedInScraper() as scraper:
                 for source in sources:
                     _log(run.id, "INFO", f"→ Source: {source['name']}")
                     try:
-                        raw_jobs = await scraper.scrape_search_page(
-                            url=source["url"],
+                        raw_jobs = scraper.scrape_search_page(
+                            source=source,
                             company=source.get("company", "Xiaomi"),
-                            max_pages=source.get("max_pages", 5),
-                            scroll_count=source.get("scroll_count", 3),
                         )
-                        _log(run.id, "INFO", f"  Found {len(raw_jobs)} raw jobs")
+                        _log(run.id, "INFO", f"  Found {len(raw_jobs)} jobs")
 
                         for raw_job in raw_jobs:
                             try:
                                 if enrich_details and raw_job.get("canonical_url"):
-                                    raw_job = await scraper.enrich_job_details(raw_job)
+                                    raw_job = scraper.enrich_job_details(raw_job)
 
                                 classification = self.classifier.classify(raw_job)
                                 result = self.store.upsert_job(raw_job, classification, run.id)
@@ -102,18 +99,15 @@ class ScrapeRunner:
                                     seen_canonical_keys.append(result["canonical_key"])
 
                                 run.jobs_seen_count += 1
-                                # Flush stats periodically
                                 self.db.commit()
 
                             except Exception as e:
                                 _log(run.id, "ERROR", f"  Job error: {e}")
                                 total_errors += 1
-                                continue
 
                     except Exception as e:
                         _log(run.id, "ERROR", f"  Source {source['name']} failed: {e}")
                         total_errors += 1
-                        continue
 
         except Exception as e:
             _log(run.id, "ERROR", f"Run failed: {e}")

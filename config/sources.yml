@@ -1,51 +1,39 @@
 sources:
-  - name: xiaomi_global_jobs
+  # Xiaomi Technology company page, all European jobs
+  # linkedin.com/company/xiaomi-technology → company ID 2300557
+  - name: xiaomi_company_europe
     enabled: true
-    url: "https://www.linkedin.com/jobs/search/?f_C=1090514&sortBy=DD"
+    type: company
+    company_id: "2300557"
+    geo_id: "91000002"   # Europe
     company: Xiaomi
-    description: "All Xiaomi LinkedIn jobs, sorted by date"
-    max_pages: 10
-    scroll_count: 5
+    url: "https://www.linkedin.com/company/xiaomi-technology/jobs/"
+    max_results: 250
 
+  # Keyword searches — catches jobs LinkedIn may not surface in company results
   - name: xiaomi_ev_keyword
     enabled: true
-    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+electric+vehicle&sortBy=DD"
+    type: keyword
+    keywords: "Xiaomi EV"
+    geo_id: "91000002"
     company: Xiaomi
-    description: "Xiaomi EV keyword search"
-    max_pages: 5
-    scroll_count: 3
+    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+EV"
+    max_results: 75
 
   - name: xiaomi_automotive_keyword
     enabled: true
-    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+automotive&sortBy=DD"
+    type: keyword
+    keywords: "Xiaomi Automotive"
+    geo_id: "91000002"
     company: Xiaomi
-    description: "Xiaomi automotive keyword search"
-    max_pages: 5
-    scroll_count: 3
+    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+automotive"
+    max_results: 75
 
-  - name: xiaomi_germany
+  - name: xiaomi_su7_keyword
     enabled: true
-    url: "https://www.linkedin.com/jobs/search/?f_C=1090514&geoId=101282230&sortBy=DD"
+    type: keyword
+    keywords: "Xiaomi SU7"
+    geo_id: "91000002"
     company: Xiaomi
-    description: "Xiaomi jobs in Germany"
-    max_pages: 5
-    scroll_count: 3
-
-  - name: xiaomi_europe
-    enabled: true
-    url: "https://www.linkedin.com/jobs/search/?f_C=1090514&geoId=91000000&sortBy=DD"
-    company: Xiaomi
-    description: "Xiaomi jobs in Europe"
-    max_pages: 5
-    scroll_count: 3
-
-scraper:
-  user_agents:
-    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-  viewport:
-    width: 1280
-    height: 800
-  locale: "en-US"
-  timezone: "Europe/Berlin"
+    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+su7"
+    max_results: 75

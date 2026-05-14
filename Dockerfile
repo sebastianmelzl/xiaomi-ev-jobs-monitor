@@ -1,15 +1,15 @@
-FROM mcr.microsoft.com/playwright/python:v1.45.0-jammy
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Python dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libffi-dev && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
 COPY . .
 
-# Create runtime directories
 RUN mkdir -p data logs
 
 EXPOSE 8000

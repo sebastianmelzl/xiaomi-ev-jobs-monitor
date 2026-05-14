@@ -16,16 +16,15 @@ _active_run_id: Optional[int] = None
 
 
 def _run_scrape_sync(source_names: Optional[List[str]] = None, run_id: Optional[int] = None) -> None:
-    """Runs the async scraper in a new event loop (used by BackgroundTasks)."""
     global _active_run_id
     from app.scraper.runner import ScrapeRunner
 
     db = SessionLocal()
     try:
         runner = ScrapeRunner(db)
-        run = asyncio.run(runner.run(source_names=source_names, existing_run_id=run_id))
+        run = runner.run(source_names=source_names, existing_run_id=run_id)
         _active_run_id = None
-        logger.info(f"Background scrape run {run.id} finished: {run.status}")
+        logger.info(f"Scrape run {run.id} finished: {run.status}")
     except Exception as e:
         logger.error(f"Background scrape failed: {e}")
         _active_run_id = None

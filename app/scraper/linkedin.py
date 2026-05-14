@@ -1,338 +1,237 @@
 """
-LinkedIn browser automation scraper using Playwright.
-Handles both unauthenticated (search results) and optional authenticated scraping.
+LinkedIn scraper using the public guest API (requests + BeautifulSoup).
+No browser automation — works reliably from server environments.
 """
-import asyncio
-import random
 import re
+import time
+import random
 import os
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any, Optional
+
+import requests
+from bs4 import BeautifulSoup
 from loguru import logger
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from playwright.async_api import (
-    async_playwright, Browser, BrowserContext, Page, TimeoutError as PWTimeout
-)
 
-from app.scraper.extractors import collect_job_cards, extract_card_data, extract_detail_data
 from app.scraper.normalizer import (
-    extract_linkedin_job_id, canonicalize_linkedin_url,
-    make_canonical_job_key, parse_posted_date, parse_applicant_count
+    canonicalize_linkedin_url, make_canonical_job_key,
+    parse_posted_date, parse_applicant_count,
 )
 
+SCRAPER_MIN_DELAY = float(os.getenv("SCRAPER_MIN_DELAY_S", "1.2"))
+SCRAPER_MAX_DELAY = float(os.getenv("SCRAPER_MAX_DELAY_S", "2.5"))
 
-SCRAPER_MIN_DELAY = float(os.getenv("SCRAPER_MIN_DELAY_S", "2.0"))
-SCRAPER_MAX_DELAY = float(os.getenv("SCRAPER_MAX_DELAY_S", "5.0"))
-SCRAPER_HEADLESS = os.getenv("SCRAPER_HEADLESS", "true").lower() == "true"
-SCRAPER_TIMEOUT = int(os.getenv("SCRAPER_TIMEOUT_MS", "30000"))
-LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL", "")
-LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD", "")
+_GUEST_SEARCH = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+_GUEST_DETAIL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{}"
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-]
-
-
-async def _random_delay() -> None:
-    delay = random.uniform(SCRAPER_MIN_DELAY, SCRAPER_MAX_DELAY)
-    await asyncio.sleep(delay)
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.linkedin.com/",
+}
 
 
-_STEALTH_SCRIPT = """
-    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-    window.chrome = {runtime: {}, loadTimes: function(){}, csi: function(){}, app: {}};
-    const orig = navigator.permissions.query;
-    navigator.permissions.query = (params) =>
-        params.name === 'notifications'
-            ? Promise.resolve({state: Notification.permission})
-            : orig(params);
-"""
-
-
-async def _build_context(playwright_instance: Any) -> tuple[Browser, BrowserContext]:
-    browser = await playwright_instance.chromium.launch(
-        headless=SCRAPER_HEADLESS,
-        args=[
-            "--no-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--window-size=1280,800",
-        ],
-    )
-    context = await browser.new_context(
-        user_agent=random.choice(USER_AGENTS),
-        viewport={"width": 1280, "height": 800},
-        locale="en-US",
-        timezone_id="Europe/Berlin",
-        extra_http_headers={
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-        },
-    )
-    # Inject stealth overrides before every page load
-    await context.add_init_script(_STEALTH_SCRIPT)
-    # Block images and fonts to speed up scraping
-    await context.route(
-        "**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,otf}",
-        lambda route: route.abort()
-    )
-    return browser, context
-
-
-async def _handle_linkedin_wall(page: Page) -> bool:
-    """
-    Detect and dismiss LinkedIn sign-in prompts or modal overlays.
-    Returns True if wall was found and handled (content may be partially available),
-    False if no wall detected.
-    """
-    wall_selectors = [
-        ".modal__overlay",
-        ".contextual-sign-in-modal",
-        "button[data-tracking-control-name='guest_homepage-basic_sign-in-modal_dismiss']",
-        ".sign-in-modal",
-    ]
-    for sel in wall_selectors:
-        try:
-            el = await page.query_selector(sel)
-            if el:
-                # Try to dismiss
-                close = await page.query_selector(
-                    "button[aria-label='Dismiss'], button[aria-label='Close'], .modal__dismiss"
-                )
-                if close:
-                    await close.click()
-                    await asyncio.sleep(0.5)
-                logger.debug("LinkedIn modal wall detected and dismissed")
-                return True
-        except Exception:
-            pass
-    return False
-
-
-async def _login_if_configured(page: Page) -> bool:
-    """Attempt LinkedIn login if credentials are configured."""
-    if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
-        return False
-    try:
-        await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
-        await page.fill("#username", LINKEDIN_EMAIL)
-        await page.fill("#password", LINKEDIN_PASSWORD)
-        await page.click("button[type='submit']")
-        await page.wait_for_url("**/feed/**", timeout=10000)
-        logger.info("LinkedIn login successful")
-        return True
-    except Exception as e:
-        logger.warning(f"LinkedIn login failed: {e}")
-        return False
+def _delay() -> None:
+    time.sleep(random.uniform(SCRAPER_MIN_DELAY, SCRAPER_MAX_DELAY))
 
 
 class LinkedInScraper:
-    """Stateless scraper — create new instance per run or reuse within a run."""
+    """Sync scraper using LinkedIn's public guest API endpoints."""
 
     def __init__(self) -> None:
-        self._playwright = None
-        self._browser: Optional[Browser] = None
-        self._context: Optional[BrowserContext] = None
-        self._authenticated = False
+        self._session: Optional[requests.Session] = None
 
-    async def __aenter__(self) -> "LinkedInScraper":
-        self._playwright = await async_playwright().start()
-        self._browser, self._context = await _build_context(self._playwright)
-        page = await self._context.new_page()
-        # Attempt login
-        self._authenticated = await _login_if_configured(page)
-        await page.close()
+    def __enter__(self) -> "LinkedInScraper":
+        self._session = requests.Session()
+        self._session.headers.update(_HEADERS)
         return self
 
-    async def __aexit__(self, *_) -> None:
-        if self._context:
-            await self._context.close()
-        if self._browser:
-            await self._browser.close()
-        if self._playwright:
-            await self._playwright.stop()
+    def __exit__(self, *_) -> None:
+        if self._session:
+            self._session.close()
+            self._session = None
 
-    async def scrape_search_page(
-        self,
-        url: str,
-        company: str = "Xiaomi",
-        max_pages: int = 5,
-        scroll_count: int = 5,
-    ) -> List[Dict[str, Any]]:
-        """
-        Scrape a LinkedIn job search URL.
-        Returns a list of raw job dicts.
-        """
-        jobs: List[Dict[str, Any]] = []
-        page = await self._context.new_page()
-        page.set_default_timeout(SCRAPER_TIMEOUT)
+    # ── Public interface (mirrors old async API, now sync) ────────────────────
 
-        try:
-            current_url = url
-            for page_num in range(max_pages):
-                logger.info(f"Scraping page {page_num + 1}: {current_url}")
-                try:
-                    await page.goto(current_url, wait_until="domcontentloaded")
-                    await _random_delay()
-                    await _handle_linkedin_wall(page)
-                except PWTimeout:
-                    logger.warning(f"Timeout loading {current_url}")
-                    break
+    def scrape_search_page(self, source: Dict[str, Any], company: str = "Xiaomi") -> List[Dict[str, Any]]:
+        """Scrape jobs for a source config dict. Routes by source['type']."""
+        src_type = source.get("type", "company")
+        max_results = source.get("max_results", 100)
+        geo_id = str(source.get("geo_id", "91000002"))
 
-                cards = await collect_job_cards(page, scroll_count=scroll_count)
-                logger.info(f"Found {len(cards)} cards on page {page_num + 1}")
+        if src_type == "company":
+            return self._scrape_company(
+                company_id=str(source["company_id"]),
+                geo_id=geo_id,
+                company=company,
+                max_results=max_results,
+            )
+        elif src_type == "keyword":
+            return self._scrape_keyword(
+                keywords=source["keywords"],
+                geo_id=geo_id,
+                company=company,
+                max_results=max_results,
+            )
+        return []
 
-                if not cards:
-                    break
-
-                for card in cards:
-                    try:
-                        card_data = await extract_card_data(card)
-                        if not card_data.get("raw_job_id") and not card_data.get("job_url"):
-                            continue
-                        job = self._build_job_dict(card_data, company)
-                        jobs.append(job)
-                    except Exception as e:
-                        logger.warning(f"Card extraction error: {e}")
-                        continue
-
-                # Pagination: try to find "next" button
-                next_url = await self._find_next_page_url(page, page_num)
-                if not next_url:
-                    break
-                current_url = next_url
-                await _random_delay()
-
-        except Exception as e:
-            logger.error(f"Search page scrape failed: {e}")
-        finally:
-            await page.close()
-
-        return jobs
-
-    async def enrich_job_details(
-        self,
-        job: Dict[str, Any],
-        force_reload: bool = False,
-    ) -> Dict[str, Any]:
-        """
-        Navigate to the job detail page and enrich with full description,
-        applicant count, and structured criteria.
-        """
-        url = job.get("canonical_url") or job.get("job_url")
-        if not url:
+    def enrich_job_details(self, job: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch full description and criteria from the guest detail endpoint."""
+        job_id = job.get("linkedin_job_id")
+        if not job_id:
             return job
-
-        page = await self._context.new_page()
-        page.set_default_timeout(SCRAPER_TIMEOUT)
-
         try:
-            await page.goto(url, wait_until="domcontentloaded")
-            await _random_delay()
-            await _handle_linkedin_wall(page)
+            resp = self._session.get(_GUEST_DETAIL.format(job_id), timeout=20)
+            if resp.status_code == 429:
+                logger.warning("Rate limited on detail fetch, sleeping 15s")
+                time.sleep(15)
+                resp = self._session.get(_GUEST_DETAIL.format(job_id), timeout=20)
+            if resp.status_code != 200:
+                return job
 
-            # Expand "Show more" in description
-            try:
-                more_btn = await page.query_selector("button.show-more-less-html__button")
-                if more_btn:
-                    await more_btn.click()
-                    await asyncio.sleep(0.5)
-            except Exception:
-                pass
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-            detail = await extract_detail_data(page)
+            desc_div = (
+                soup.find("div", class_=re.compile(r"show-more-less-html__markup"))
+                or soup.find("div", class_=re.compile(r"description__text"))
+                or soup.find("div", class_=re.compile(r"decorated-job-posting__details"))
+            )
+            if desc_div:
+                job["description"] = desc_div.get_text(separator="\n", strip=True)[:5000]
 
-            # Merge detail data into job dict (detail overrides card-level if richer)
-            if detail.get("title") and not job.get("title"):
-                job["title"] = detail["title"]
-            if detail.get("company") and not job.get("company"):
-                job["company"] = detail["company"]
-            if detail.get("location") and not job.get("location"):
-                job["location"] = detail["location"]
-            if detail.get("description"):
-                job["description"] = detail["description"]
-            if detail.get("seniority"):
-                job["seniority_level"] = detail["seniority"]
-            if detail.get("employment_type"):
-                job["employment_type"] = detail["employment_type"]
-            if detail.get("department"):
-                job["department"] = detail["department"]
-            if detail.get("applicants"):
-                parsed = parse_applicant_count(detail["applicants"])
+            for item in soup.find_all("li", class_=re.compile(r"description__job-criteria-item")):
+                label = item.find("h3")
+                value = item.find("span")
+                if not label or not value:
+                    continue
+                lbl = label.get_text(strip=True).lower()
+                val = value.get_text(strip=True)
+                if "seniority" in lbl:
+                    job["seniority_level"] = val
+                elif "employment" in lbl or "job type" in lbl:
+                    job["employment_type"] = val
+                elif "function" in lbl or "department" in lbl:
+                    job["department"] = val
+
+            count_el = (
+                soup.find("figcaption", class_=re.compile(r"num-applicants"))
+                or soup.find(class_=re.compile(r"num-applicants__caption"))
+                or soup.find(class_=re.compile(r"jobs-unified-top-card__applicant-count"))
+            )
+            raw_count = ""
+            if count_el:
+                raw_count = count_el.get_text(strip=True)
+            else:
+                m = re.search(r"([\d,]+\+?\s*(?:applicants?|Bewerber))", resp.text, re.IGNORECASE)
+                if m:
+                    raw_count = m.group(1).strip()
+            if raw_count:
+                parsed = parse_applicant_count(raw_count)
                 job["raw_applicant_text"] = parsed["raw"]
                 job["applicant_count_exact"] = parsed["exact"]
                 job["applicant_count_min"] = parsed["min"]
                 job["applicant_count_quality"] = parsed["quality"]
-            if detail.get("posted_time") and not job.get("posted_time"):
-                job["posted_time"] = detail["posted_time"]
 
+            _delay()
         except Exception as e:
-            logger.warning(f"Detail enrichment failed for {url}: {e}")
-        finally:
-            await page.close()
-
+            logger.warning(f"Detail enrich failed for job {job_id}: {e}")
         return job
 
-    def _build_job_dict(self, card_data: Dict, company: str) -> Dict[str, Any]:
-        job_id = card_data.get("raw_job_id")
-        raw_url = card_data.get("job_url") or ""
-        if raw_url and not raw_url.startswith("http"):
-            raw_url = "https://www.linkedin.com" + raw_url
+    # ── Internal helpers ──────────────────────────────────────────────────────
 
-        linkedin_id = job_id or extract_linkedin_job_id(raw_url)
-        canonical = canonicalize_linkedin_url(raw_url)
-        posted_raw = card_data.get("posted_time")
+    def _scrape_company(self, company_id: str, geo_id: str, company: str, max_results: int) -> List[Dict]:
+        jobs: List[Dict] = []
+        for start in range(0, max_results, 25):
+            cards = self._fetch_cards(f_C=company_id, geoId=geo_id, start=start)
+            if not cards:
+                break
+            jobs.extend(self._parse_cards(cards, company))
+            _delay()
+        return jobs
 
-        return {
-            "source": "linkedin",
-            "linkedin_job_id": linkedin_id,
-            "job_url": raw_url,
-            "canonical_url": canonical,
-            "title": card_data.get("title"),
-            "company": card_data.get("company") or company,
-            "location": card_data.get("location"),
-            "posted_time": posted_raw,
-            "posted_date_normalized": parse_posted_date(posted_raw),
-            "description": None,
-            "seniority_level": None,
-            "employment_type": None,
-            "department": None,
-            "raw_applicant_text": None,
-            "applicant_count_exact": None,
-            "applicant_count_min": None,
-            "applicant_count_quality": "unavailable",
-            "canonical_job_key": make_canonical_job_key(
-                linkedin_id,
-                card_data.get("title"),
-                card_data.get("company") or company,
-                card_data.get("location"),
-                posted_raw,
-            ),
-        }
+    def _scrape_keyword(self, keywords: str, geo_id: str, company: str, max_results: int) -> List[Dict]:
+        jobs: List[Dict] = []
+        for start in range(0, max_results, 25):
+            cards = self._fetch_cards(keywords=keywords, geoId=geo_id, start=start)
+            if not cards:
+                break
+            jobs.extend(self._parse_cards(cards, company))
+            _delay()
+        return jobs
 
-    @staticmethod
-    async def _find_next_page_url(page: Page, current_page: int) -> Optional[str]:
-        """Try to locate a 'next page' link or paginated URL."""
+    def _fetch_cards(self, **params) -> List[Any]:
         try:
-            next_btn = await page.query_selector(
-                "button[aria-label='Page {n}']".format(n=current_page + 2),
-            )
-            if next_btn:
-                await next_btn.click()
-                await asyncio.sleep(1.0)
-                return page.url
-        except Exception:
-            pass
+            resp = self._session.get(_GUEST_SEARCH, params={**params, "count": 25}, timeout=20)
+            if resp.status_code == 429:
+                logger.warning("Rate limited (429) on search, sleeping 15s")
+                time.sleep(15)
+                return []
+            if resp.status_code != 200:
+                logger.warning(f"Guest search returned HTTP {resp.status_code}")
+                return []
+            soup = BeautifulSoup(resp.text, "html.parser")
+            return soup.find_all("div", class_=re.compile(r"base-search-card"))
+        except Exception as e:
+            logger.error(f"_fetch_cards failed: {e}")
+            return []
 
-        # URL-based pagination: append &start=N
-        current = page.url
-        if "start=" not in current:
-            return current + f"&start={25 * (current_page + 1)}"
-        return re.sub(r"start=\d+", f"start={25 * (current_page + 1)}", current)
+    def _parse_cards(self, cards: List[Any], company: str) -> List[Dict]:
+        jobs: List[Dict] = []
+        for card in cards:
+            try:
+                urn = card.get("data-entity-urn", "")
+                m = re.search(r":(\d+)$", urn)
+                if not m:
+                    continue
+                job_id = m.group(1)
+
+                title_el = card.find(class_=re.compile(r"base-search-card__title"))
+                company_el = card.find(class_=re.compile(r"base-search-card__subtitle"))
+                location_el = card.find(class_=re.compile(r"job-search-card__location"))
+                time_el = card.find("time")
+                link_el = card.find("a", class_=re.compile(r"base-card__full-link"))
+
+                title = title_el.get_text(strip=True) if title_el else ""
+                if not title:
+                    continue
+
+                company_name = (company_el.get_text(strip=True) if company_el else "") or company
+                location = location_el.get_text(strip=True) if location_el else ""
+                posted_raw = ""
+                if time_el:
+                    posted_raw = time_el.get("datetime", "") or time_el.get_text(strip=True)
+
+                raw_url = ""
+                if link_el:
+                    raw_url = link_el.get("href", "").split("?")[0]
+                if not raw_url:
+                    raw_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
+
+                canonical = canonicalize_linkedin_url(raw_url) or raw_url
+
+                jobs.append({
+                    "source": "linkedin",
+                    "linkedin_job_id": job_id,
+                    "job_url": raw_url,
+                    "canonical_url": canonical,
+                    "title": title,
+                    "company": company_name,
+                    "location": location,
+                    "posted_time": posted_raw,
+                    "posted_date_normalized": parse_posted_date(posted_raw),
+                    "description": None,
+                    "seniority_level": None,
+                    "employment_type": None,
+                    "department": None,
+                    "raw_applicant_text": None,
+                    "applicant_count_exact": None,
+                    "applicant_count_min": None,
+                    "applicant_count_quality": "unavailable",
+                    "canonical_job_key": make_canonical_job_key(
+                        job_id, title, company_name, location, posted_raw
+                    ),
+                })
+            except Exception as e:
+                logger.warning(f"Card parse error: {e}")
+        return jobs

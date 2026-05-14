@@ -2,7 +2,6 @@
 APScheduler-based background scheduler for periodic scrape runs.
 Activated via SCHEDULER_ENABLED=true in .env.
 """
-import asyncio
 import os
 from datetime import datetime
 from typing import Optional
@@ -25,7 +24,7 @@ def _run_scheduled_scrape() -> None:
     db = SessionLocal()
     try:
         runner = ScrapeRunner(db)
-        asyncio.run(runner.run())
+        runner.run()
     except Exception as e:
         logger.error(f"Scheduled scrape failed: {e}")
     finally:
