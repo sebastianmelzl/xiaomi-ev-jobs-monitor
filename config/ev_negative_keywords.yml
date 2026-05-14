@@ -1,0 +1,84 @@
+# EV Negative Keyword Configuration
+# penalty: strong = -30 pts, moderate = -15 pts, weak = -5 pts
+
+clusters:
+  consumer_electronics:
+    penalty: strong
+    keywords:
+      - smartphone
+      - mobile phone
+      - handset
+      - tablet
+      - wearable device
+      - smartwatch
+      - fitness tracker
+      - earbuds
+      - TWS
+      - true wireless
+      - smart TV
+      - television
+      - smart home hub
+      - home appliance
+      - vacuum cleaner
+      - air purifier
+      - rice cooker
+      - router WiFi consumer
+      - IP camera consumer
+
+  retail_ecommerce:
+    penalty: strong
+    keywords:
+      - e-commerce
+      - ecommerce
+      - online retail
+      - marketplace
+      - consumer retail
+      - retail operations
+      - store operations
+      - merchandising
+      - category management retail
+      - consumer sales
+
+  non_automotive_marketing:
+    penalty: moderate
+    keywords:
+      - mobile marketing
+      - app marketing
+      - mobile app
+      - smartphone marketing
+      - phone accessories
+      - consumer electronics marketing
+      - phone case
+      - mobile accessories
+
+  non_automotive_software:
+    penalty: moderate
+    keywords:
+      - iOS developer
+      - Android developer
+      - mobile developer
+      - mobile app developer
+      - app development
+      - iOS app
+      - Android app
+      - MIUI
+      - HyperOS phone
+      - mobile OS
+
+  generic_support:
+    penalty: weak
+    keywords:
+      - customer service generic
+      - call center
+      - retail associate
+      - store manager retail
+      - brand ambassador consumer
+
+# Jobs with these exact titles are almost certainly non-EV
+excluded_title_patterns:
+  - "smartphone.*engineer"
+  - "mobile.*app.*developer"
+  - "iOS.*engineer"
+  - "Android.*engineer"
+  - "ecommerce.*manager"
+  - "retail.*store.*manager"

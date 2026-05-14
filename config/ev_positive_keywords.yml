@@ -1,0 +1,220 @@
+# EV Positive Keyword Configuration
+# tier: hard = strong signal (+25 pts), soft = moderate signal (+10 pts), context = weak signal (+5 pts)
+
+clusters:
+  vehicle_engineering:
+    tier: hard
+    keywords:
+      - vehicle engineering
+      - vehicle dynamics
+      - vehicle integration
+      - vehicle systems
+      - vehicle architecture
+      - body engineering
+      - body in white
+      - chassis
+      - chassis development
+      - suspension
+      - steering system
+      - brake system
+      - powertrain
+      - drivetrain
+      - driveline
+      - eAxle
+      - e-axle
+      - electric axle
+      - axle development
+      - driveshaft
+      - differential
+      - transmission
+
+  battery_systems:
+    tier: hard
+    keywords:
+      - battery
+      - battery system
+      - battery pack
+      - battery management
+      - BMS
+      - battery management system
+      - cell chemistry
+      - battery thermal
+      - battery safety
+      - energy storage
+      - lithium ion
+      - SOC
+      - state of charge
+      - high voltage
+      - HV system
+      - battery integration
+
+  electric_vehicle_explicit:
+    tier: hard
+    keywords:
+      - electric vehicle
+      - electric vehicles
+      - EV
+      - BEV
+      - PHEV
+      - HEV
+      - NEV
+      - new energy vehicle
+      - Xiaomi EV
+      - SU7
+      - YU7
+      - automotive electrification
+      - e-mobility
+      - emobility
+      - electromobility
+
+  adas_autonomous:
+    tier: hard
+    keywords:
+      - ADAS
+      - autonomous driving
+      - automated driving
+      - self-driving
+      - driver assistance
+      - advanced driver assistance
+      - perception
+      - sensor fusion
+      - lidar
+      - radar automotive
+      - camera system automotive
+      - localization
+      - HD map
+      - path planning
+      - motion planning
+      - object detection automotive
+      - scene understanding
+
+  thermal_management:
+    tier: hard
+    keywords:
+      - thermal management
+      - HVAC automotive
+      - heat pump automotive
+      - thermal system
+      - cooling system automotive
+      - battery cooling
+      - motor cooling
+      - thermal runaway
+
+  ee_architecture:
+    tier: hard
+    keywords:
+      - E/E architecture
+      - electrical electronic architecture
+      - vehicle electronics
+      - automotive software
+      - embedded automotive
+      - ECU
+      - electronic control unit
+      - CAN bus
+      - LIN bus
+      - Ethernet automotive
+      - AUTOSAR
+      - automotive middleware
+      - functional safety
+      - ISO 26262
+      - ASPICE
+      - SOTIF
+
+  cockpit_hmi:
+    tier: hard
+    keywords:
+      - cockpit
+      - digital cockpit
+      - instrument cluster
+      - head up display
+      - HUD
+      - HMI automotive
+      - infotainment
+      - in-vehicle infotainment
+      - IVI
+      - connected vehicle
+      - V2X
+      - telematics automotive
+
+  homologation_regulation:
+    tier: hard
+    keywords:
+      - homologation
+      - type approval
+      - vehicle certification
+      - regulatory automotive
+      - UNECE
+      - WLTP
+      - NCAP
+      - crashworthiness
+      - pedestrian protection
+
+  nvh_refinement:
+    tier: hard
+    keywords:
+      - NVH
+      - noise vibration harshness
+      - noise vibration
+      - acoustic automotive
+      - vibration analysis
+      - refinement
+
+  automotive_design:
+    tier: soft
+    keywords:
+      - exterior design automotive
+      - interior design automotive
+      - automotive designer
+      - car design
+      - vehicle design
+      - clay modeling
+      - CMF automotive
+      - color material finish
+      - automotive styling
+
+  automotive_general:
+    tier: soft
+    keywords:
+      - automotive
+      - automobile
+      - automotive engineering
+      - automotive OEM
+      - automotive supplier
+      - Tier 1
+      - motor vehicle
+      - car manufacturer
+      - OEM automotive
+      - vehicle manufacturer
+      - auto industry
+
+  context_boost:
+    tier: context
+    keywords:
+      - Munich automotive
+      - Stuttgart automotive
+      - Wolfsburg
+      - R&D center automotive
+      - test driver
+      - proving ground
+      - vehicle testing
+      - fuel economy
+      - zero emission
+      - carbon neutral mobility
+
+location_boost:
+  - Munich
+  - München
+  - Stuttgart
+  - Ingolstadt
+  - Wolfsburg
+  - Sindelfingen
+  - Regensburg
+  - Chemnitz
+  - Graz
+  - Gothenburg
+  - Coventry
+  - Turin
+  - Torino
+  - Yokohama
+  - Shanghai automotive
+  - Beijing automotive

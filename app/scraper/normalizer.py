@@ -1,0 +1,203 @@
+"""
+URL canonicalization, key generation, and data normalization utilities.
+All functions are pure — no side effects, deterministic output.
+"""
+import re
+import hashlib
+from datetime import datetime, timedelta
+from typing import Optional
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+
+# ── URL normalization ─────────────────────────────────────────────────────────
+
+_LINKEDIN_JOB_ID_RE = re.compile(r"/jobs/view/(\d+)")
+_ENTITY_URN_RE = re.compile(r"jobPosting:(\d+)")
+
+
+def extract_linkedin_job_id(url: str) -> Optional[str]:
+    """Extract the numeric LinkedIn job ID from a job URL or data-entity-urn."""
+    if not url:
+        return None
+    m = _LINKEDIN_JOB_ID_RE.search(url)
+    if m:
+        return m.group(1)
+    m = _ENTITY_URN_RE.search(url)
+    if m:
+        return m.group(1)
+    return None
+
+
+def canonicalize_linkedin_url(url: str) -> Optional[str]:
+    """
+    Normalize a LinkedIn job URL to its canonical form.
+    Strips tracking params, normalizes path.
+    Returns None if url cannot be parsed.
+    """
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url.strip())
+        if not parsed.netloc:
+            return url.strip()
+        # Keep only the /jobs/view/{id}/ path
+        job_id = extract_linkedin_job_id(url)
+        if job_id:
+            return f"https://www.linkedin.com/jobs/view/{job_id}/"
+        # Generic canonicalization: strip tracking params
+        keep_params = {}
+        allowed = {"keywords", "location", "f_C", "geoId", "sortBy", "f_TPR"}
+        qs = parse_qs(parsed.query, keep_blank_values=False)
+        for k, v in qs.items():
+            if k in allowed:
+                keep_params[k] = v[0]
+        clean_query = urlencode(sorted(keep_params.items()))
+        canonical = urlunparse((
+            "https", "www.linkedin.com",
+            parsed.path.rstrip("/") + "/",
+            "", clean_query, ""
+        ))
+        return canonical
+    except Exception:
+        return url
+
+
+# ── Canonical job key ─────────────────────────────────────────────────────────
+
+def make_canonical_job_key(
+    linkedin_job_id: Optional[str],
+    title: Optional[str],
+    company: Optional[str],
+    location: Optional[str],
+    posted_text: Optional[str],
+) -> str:
+    """
+    Generate a stable, unique key for a job.
+    Priority: LinkedIn job ID → hash of (title + company + location + posted).
+    """
+    if linkedin_job_id:
+        return f"linkedin:{linkedin_job_id}"
+    # Fallback: hash of normalized fields
+    parts = [
+        _normalize_str(title),
+        _normalize_str(company),
+        _normalize_str(location),
+        _normalize_str(posted_text),
+    ]
+    combined = "|".join(p for p in parts if p)
+    digest = hashlib.sha256(combined.encode()).hexdigest()[:16]
+    return f"hash:{digest}"
+
+
+def _normalize_str(s: Optional[str]) -> str:
+    if not s:
+        return ""
+    return re.sub(r"\s+", " ", s.strip().lower())
+
+
+# ── Posted date normalization ─────────────────────────────────────────────────
+
+_RELATIVE_PATTERNS = [
+    (re.compile(r"(\d+)\s+hour", re.I), "hours"),
+    (re.compile(r"(\d+)\s+day", re.I), "days"),
+    (re.compile(r"(\d+)\s+week", re.I), "weeks"),
+    (re.compile(r"(\d+)\s+month", re.I), "months"),
+    (re.compile(r"just now|moments ago", re.I), "now"),
+]
+
+
+def parse_posted_date(raw_text: Optional[str], reference: Optional[datetime] = None) -> Optional[datetime]:
+    """
+    Convert LinkedIn's relative posted strings to an approximate datetime.
+    Examples: "2 days ago", "3 weeks ago", "1 month ago", "2024-01-15"
+    """
+    if not raw_text:
+        return None
+    ref = reference or datetime.utcnow()
+    text = raw_text.strip().lower()
+
+    # ISO date
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+
+    for pattern, unit in _RELATIVE_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            if unit == "now":
+                return ref
+            n = int(m.group(1))
+            if unit == "hours":
+                return ref - timedelta(hours=n)
+            if unit == "days":
+                return ref - timedelta(days=n)
+            if unit == "weeks":
+                return ref - timedelta(weeks=n)
+            if unit == "months":
+                return ref - timedelta(days=n * 30)
+
+    return None
+
+
+# ── Applicant count parsing ───────────────────────────────────────────────────
+
+_EXACT_RE = re.compile(r"^(\d[\d,]*)$")
+_OVER_RE = re.compile(r"(?:over|more than|>)\s*(\d[\d,]*)", re.I)
+_RANGE_RE = re.compile(r"(\d[\d,]*)\s*[-–]\s*(\d[\d,]*)")
+_STANDALONE_RE = re.compile(r"(\d[\d,]+)")
+
+
+def parse_applicant_count(raw_text: Optional[str]) -> dict:
+    """
+    Parse LinkedIn applicant text into structured fields.
+    Returns dict with: raw, exact, min, quality.
+
+    Examples:
+        "47 applicants"          → exact=47,  min=47,  quality=exact
+        "Over 200 applicants"    → exact=None, min=200, quality=lower_bound
+        "100-200 applicants"     → exact=None, min=100, quality=lower_bound
+        "Be an early applicant"  → exact=None, min=None, quality=unavailable
+    """
+    result = {
+        "raw": raw_text,
+        "exact": None,
+        "min": None,
+        "quality": "unavailable",
+    }
+    if not raw_text:
+        return result
+
+    text = raw_text.strip()
+
+    m = _OVER_RE.search(text)
+    if m:
+        result["min"] = _parse_int(m.group(1))
+        result["quality"] = "lower_bound"
+        return result
+
+    m = _RANGE_RE.search(text)
+    if m:
+        result["min"] = _parse_int(m.group(1))
+        result["quality"] = "lower_bound"
+        return result
+
+    m = _EXACT_RE.match(text.replace(",", "").split()[0]) if text else None
+    if not m:
+        m = _STANDALONE_RE.search(text)
+    if m:
+        val = _parse_int(m.group(1))
+        if val is not None:
+            result["exact"] = val
+            result["min"] = val
+            result["quality"] = "exact"
+        return result
+
+    return result
+
+
+def _parse_int(s: str) -> Optional[int]:
+    try:
+        return int(s.replace(",", ""))
+    except (ValueError, AttributeError):
+        return None

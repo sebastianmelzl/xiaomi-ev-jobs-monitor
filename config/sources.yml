@@ -1,0 +1,51 @@
+sources:
+  - name: xiaomi_global_jobs
+    enabled: true
+    url: "https://www.linkedin.com/jobs/search/?f_C=1090514&sortBy=DD"
+    company: Xiaomi
+    description: "All Xiaomi LinkedIn jobs, sorted by date"
+    max_pages: 10
+    scroll_count: 5
+
+  - name: xiaomi_ev_keyword
+    enabled: true
+    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+electric+vehicle&sortBy=DD"
+    company: Xiaomi
+    description: "Xiaomi EV keyword search"
+    max_pages: 5
+    scroll_count: 3
+
+  - name: xiaomi_automotive_keyword
+    enabled: true
+    url: "https://www.linkedin.com/jobs/search/?keywords=xiaomi+automotive&sortBy=DD"
+    company: Xiaomi
+    description: "Xiaomi automotive keyword search"
+    max_pages: 5
+    scroll_count: 3
+
+  - name: xiaomi_germany
+    enabled: true
+    url: "https://www.linkedin.com/jobs/search/?f_C=1090514&geoId=101282230&sortBy=DD"
+    company: Xiaomi
+    description: "Xiaomi jobs in Germany"
+    max_pages: 5
+    scroll_count: 3
+
+  - name: xiaomi_europe
+    enabled: true
+    url: "https://www.linkedin.com/jobs/search/?f_C=1090514&geoId=91000000&sortBy=DD"
+    company: Xiaomi
+    description: "Xiaomi jobs in Europe"
+    max_pages: 5
+    scroll_count: 3
+
+scraper:
+  user_agents:
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  viewport:
+    width: 1280
+    height: 800
+  locale: "en-US"
+  timezone: "Europe/Berlin"
