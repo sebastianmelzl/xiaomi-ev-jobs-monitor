@@ -4,6 +4,7 @@ Handles both unauthenticated (search results) and optional authenticated scrapin
 """
 import asyncio
 import random
+import re
 import os
 from typing import List, Dict, Optional, Any
 from loguru import logger
@@ -38,10 +39,29 @@ async def _random_delay() -> None:
     await asyncio.sleep(delay)
 
 
+_STEALTH_SCRIPT = """
+    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+    window.chrome = {runtime: {}, loadTimes: function(){}, csi: function(){}, app: {}};
+    const orig = navigator.permissions.query;
+    navigator.permissions.query = (params) =>
+        params.name === 'notifications'
+            ? Promise.resolve({state: Notification.permission})
+            : orig(params);
+"""
+
+
 async def _build_context(playwright_instance: Any) -> tuple[Browser, BrowserContext]:
     browser = await playwright_instance.chromium.launch(
         headless=SCRAPER_HEADLESS,
-        args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+        args=[
+            "--no-sandbox",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--window-size=1280,800",
+        ],
     )
     context = await browser.new_context(
         user_agent=random.choice(USER_AGENTS),
@@ -50,9 +70,14 @@ async def _build_context(playwright_instance: Any) -> tuple[Browser, BrowserCont
         timezone_id="Europe/Berlin",
         extra_http_headers={
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
         },
     )
+    # Inject stealth overrides before every page load
+    await context.add_init_script(_STEALTH_SCRIPT)
     # Block images and fonts to speed up scraping
     await context.route(
         "**/*.{png,jpg,jpeg,gif,svg,ico,woff,woff2,ttf,otf}",

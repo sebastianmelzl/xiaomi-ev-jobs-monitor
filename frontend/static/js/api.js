@@ -22,6 +22,7 @@ const API = {
   archive: (params = {}) => apiFetch('/archive?' + new URLSearchParams(params)),
   runs: (limit = 50) => apiFetch(`/scrape/runs?limit=${limit}`),
   run: (id) => apiFetch(`/scrape/runs/${id}`),
+  runLogs: (id) => apiFetch(`/scrape/runs/${id}/logs`),
   scrapeStatus: () => apiFetch('/scrape/status'),
   triggerScrape: (sourceNames = null) => apiFetch('/scrape/run', {
     method: 'POST',

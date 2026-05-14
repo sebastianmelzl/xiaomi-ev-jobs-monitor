@@ -77,6 +77,12 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
     return ScrapeRunSchema.model_validate(run)
 
 
+@router.get("/scrape/runs/{run_id}/logs")
+def get_run_logs(run_id: int):
+    from app.scraper import log_buffer
+    return {"run_id": run_id, "logs": log_buffer.get(run_id)}
+
+
 @router.get("/scrape/status")
 def scrape_status():
     return {
