@@ -102,7 +102,7 @@ def list_departments(db: Session = Depends(get_db)):
 @router.get("/jobs", response_model=PaginatedJobs)
 def list_jobs(
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    page_size: int = Query(50, ge=1, le=1000),
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     ev_label: Optional[str] = Query(None),

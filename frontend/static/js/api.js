@@ -7,8 +7,12 @@ async function apiFetch(path, options = {}) {
     ...options,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => null);
+    const detail = body?.detail;
+    const msg = Array.isArray(detail)
+      ? detail.map(e => e.msg || JSON.stringify(e)).join('; ')
+      : (typeof detail === 'string' ? detail : `HTTP ${res.status}`);
+    throw new Error(msg);
   }
   return res.json();
 }
