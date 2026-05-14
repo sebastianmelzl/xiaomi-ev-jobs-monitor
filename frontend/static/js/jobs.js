@@ -135,6 +135,16 @@ function renderDeptSection(dept, jobs) {
   const isCollapsed = jobsState.collapsed[dept] || false;
   const sectionId = `sect-${dept.replace(/[^a-z]/gi, '-')}`;
 
+  const fresh    = jobs.filter(j => !j.is_reposted);
+  const reposted = jobs.filter(j =>  j.is_reposted);
+
+  const repostedRows = reposted.length === 0 ? '' : `
+    <tr class="repost-divider">
+      <td colspan="8">↩ Reposted <span class="repost-divider-count">${reposted.length}</span></td>
+    </tr>
+    ${reposted.map(job => jobRow(job, true)).join('')}
+  `;
+
   return `
     <div class="dept-section" id="${sectionId}">
       <div class="dept-header" onclick="toggleDeptSection('${dept}', '${sectionId}')">
@@ -159,7 +169,8 @@ function renderDeptSection(dept, jobs) {
               </tr>
             </thead>
             <tbody>
-              ${jobs.map(job => jobRow(job)).join('')}
+              ${fresh.map(job => jobRow(job)).join('')}
+              ${repostedRows}
             </tbody>
           </table>
         </div>
@@ -185,7 +196,7 @@ function newnessHtml(job) {
   return '';
 }
 
-function jobRow(job) {
+function jobRow(job, dimmed = false) {
   const score = job.ev_score ?? 0;
   const scoreClass = score >= 60 ? 'high' : 'mid';
 
@@ -201,8 +212,11 @@ function jobRow(job) {
 
   const postedStr = job.posted_date_normalized ? formatDate(job.posted_date_normalized) : escHtml(job.posted_text_raw || '–');
 
+  // Show "New" badge only for non-reposted jobs; reposted jobs are grouped under the divider
+  const badgeHtml = job.is_reposted ? '' : newnessHtml(job);
+
   return `
-    <tr class="job-row" data-id="${job.id}">
+    <tr class="job-row${dimmed ? ' job-row-reposted' : ''}" data-id="${job.id}">
       <td>
         <div class="score-bar">
           <div class="score-track"><div class="score-fill ${scoreClass}" style="width:${score}%"></div></div>
@@ -211,7 +225,7 @@ function jobRow(job) {
       </td>
       <td><span class="truncate" title="${escHtml(job.title || '')}">${escHtml(job.title || '–')}</span></td>
       <td><span class="truncate" title="${escHtml(job.location || '')}">${escHtml(job.location || '–')}</span></td>
-      <td class="text-muted nowrap">${postedStr}${newnessHtml(job)}</td>
+      <td class="text-muted nowrap">${postedStr}${badgeHtml}</td>
       <td>${applicantDisplay}</td>
       <td>${deltaHtml}</td>
       <td><span class="badge badge-${job.status}">${job.status}</span></td>
