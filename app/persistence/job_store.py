@@ -70,6 +70,7 @@ class JobStore:
             description_text=raw.get("description"),
             posted_text_raw=raw.get("posted_time"),
             posted_date_normalized=raw.get("posted_date_normalized"),
+            is_reposted=bool(raw.get("is_reposted", False)),
             status=JobStatus.active,
             first_seen_at=now,
             last_seen_at=now,
@@ -125,6 +126,11 @@ class JobStore:
                 self._log_change(job.id, ChangeType.update, field, old_val, new_val, now)
                 setattr(job, field, new_val)
                 changed = True
+
+        # Mark as reposted once detected (sticky — never reset to False)
+        if raw.get("is_reposted") and not job.is_reposted:
+            job.is_reposted = True
+            changed = True
 
         # Enrich description if we now have it
         if raw.get("description") and not job.description_text:

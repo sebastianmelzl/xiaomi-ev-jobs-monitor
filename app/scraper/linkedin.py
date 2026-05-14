@@ -202,8 +202,15 @@ class LinkedInScraper:
                 company_name = (company_el.get_text(strip=True) if company_el else "") or company
                 location = normalize_location(location_el.get_text(strip=True) if location_el else "") or ""
                 posted_raw = ""
+                is_reposted = False
                 if time_el:
-                    posted_raw = time_el.get("datetime", "") or time_el.get_text(strip=True)
+                    datetime_attr = time_el.get("datetime", "")
+                    time_text = time_el.get_text(strip=True)
+                    posted_raw = datetime_attr or time_text
+                    is_reposted = any(
+                        kw in time_text.lower()
+                        for kw in ["repost", "erneut", "republish", "re-post"]
+                    )
 
                 raw_url = ""
                 if link_el:
@@ -230,6 +237,7 @@ class LinkedInScraper:
                     "raw_applicant_text": None,
                     "applicant_count_exact": None,
                     "applicant_count_min": None,
+                    "is_reposted": is_reposted,
                     "applicant_count_quality": "unavailable",
                     "canonical_job_key": make_canonical_job_key(
                         job_id, title, company_name, location, posted_raw

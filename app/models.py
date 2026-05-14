@@ -64,6 +64,7 @@ class Job(Base):
     description_text = Column(Text, nullable=True)
     posted_text_raw = Column(String(255), nullable=True)
     posted_date_normalized = Column(DateTime, nullable=True)
+    is_reposted = Column(Boolean, nullable=False, default=False)
     status = Column(SAEnum(JobStatus), nullable=False, default=JobStatus.active)
     first_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     last_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)

@@ -7,8 +7,7 @@ const DEPT_ICONS = {
   'Business & Operations': '📊',
 };
 
-const NEW_POST_DAYS  = 14;   // posted_date within this → "New Post"
-const FOUND_DAYS     = 3;    // first_seen within this AND posted older → "Just Found"
+const NEW_POST_DAYS = 14;  // posted_date within this (and not reposted) → "New"
 
 let jobsState = {
   search: '', status: 'active',
@@ -17,18 +16,14 @@ let jobsState = {
 };
 
 /**
- * Returns 'new' | 'found' | null.
- *  new   = posted_date_normalized ≤ NEW_POST_DAYS ago  (genuinely fresh on LinkedIn)
- *  found = first_seen_at ≤ FOUND_DAYS ago AND posted is older (just discovered by scraper)
+ * Returns 'reposted' | 'new' | null.
+ *  reposted = LinkedIn marked it as "erneut veröffentlicht"
+ *  new      = posted_date_normalized ≤ NEW_POST_DAYS ago and NOT reposted
  */
 function jobNewness(job) {
-  const now = Date.now();
-  const DAY = 86_400_000;
-  const posted   = job.posted_date_normalized ? new Date(job.posted_date_normalized).getTime() : null;
-  const firstSeen = job.first_seen_at ? new Date(job.first_seen_at).getTime() : null;
-
-  if (posted !== null && (now - posted) / DAY <= NEW_POST_DAYS) return 'new';
-  if (firstSeen !== null && (now - firstSeen) / DAY <= FOUND_DAYS) return 'found';
+  if (job.is_reposted) return 'reposted';
+  const posted = job.posted_date_normalized ? new Date(job.posted_date_normalized).getTime() : null;
+  if (posted !== null && (Date.now() - posted) / 86_400_000 <= NEW_POST_DAYS) return 'new';
   return null;
 }
 
@@ -94,7 +89,7 @@ async function loadJobsSections() {
 
     const data = await API.jobs(params);
 
-    // Client-side "New Posts only" filter
+    // Client-side "New Posts only" filter — excludes reposted jobs
     const items = jobsState.newOnly
       ? data.items.filter(j => jobNewness(j) === 'new')
       : data.items;
@@ -185,8 +180,8 @@ function toggleDeptSection(dept, sectionId) {
 
 function newnessHtml(job) {
   const n = jobNewness(job);
-  if (n === 'new')   return '<span class="newness-badge newness-new">New Post</span>';
-  if (n === 'found') return '<span class="newness-badge newness-found">Just Found</span>';
+  if (n === 'reposted') return '<span class="newness-badge newness-reposted">Reposted</span>';
+  if (n === 'new')      return '<span class="newness-badge newness-new">New</span>';
   return '';
 }
 

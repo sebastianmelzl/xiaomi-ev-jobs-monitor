@@ -60,6 +60,7 @@ class JobListItem(BaseModel):
     job_url: Optional[str]
     posted_text_raw: Optional[str]
     posted_date_normalized: Optional[datetime]
+    is_reposted: bool = False
     status: JobStatus
     first_seen_at: datetime
     last_seen_at: datetime
@@ -98,6 +99,7 @@ class JobDetail(BaseModel):
     description_text: Optional[str]
     posted_text_raw: Optional[str]
     posted_date_normalized: Optional[datetime]
+    is_reposted: bool = False
     status: JobStatus
     first_seen_at: datetime
     last_seen_at: datetime

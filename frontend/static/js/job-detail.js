@@ -22,6 +22,7 @@ async function openJobModal(jobId) {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <span class="badge badge-${evLabel.replace('_', '-')}">${formatEVLabelFull(evLabel)}</span>
             <span class="badge badge-${job.status}">${job.status}</span>
+            ${job.is_reposted ? '<span class="newness-badge newness-reposted">Reposted</span>' : ''}
           </div>
           <h2 style="font-size:17px;font-weight:700;line-height:1.3">${escHtml(job.title || 'Untitled')}</h2>
           <p style="color:var(--text-secondary);margin-top:4px;font-size:13px">${escHtml(job.company_name || '')} · ${escHtml(job.location || '')}</p>

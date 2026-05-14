@@ -39,9 +39,24 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     from app.models import Base
     Base.metadata.create_all(bind=engine)
+    _add_missing_columns()
     _normalize_locations()
     _normalize_departments()
     _dedup_jobs()
+
+
+def _add_missing_columns() -> None:
+    """Add new columns that create_all won't add to existing tables."""
+    from sqlalchemy import text
+    with SessionLocal() as db:
+        for stmt in [
+            "ALTER TABLE jobs ADD COLUMN is_reposted BOOLEAN NOT NULL DEFAULT 0",
+        ]:
+            try:
+                db.execute(text(stmt))
+                db.commit()
+            except Exception:
+                pass  # column already exists
 
 
 def _normalize_locations() -> None:

@@ -131,10 +131,10 @@ async function renderOverview() {
 
       el.innerHTML = recent.items.map(j => {
         const n = jobNewness(j);
-        const nBadge = n === 'new'
-          ? '<span class="newness-badge newness-new">New Post</span>'
-          : n === 'found'
-          ? '<span class="newness-badge newness-found">Just Found</span>'
+        const nBadge = n === 'reposted'
+          ? '<span class="newness-badge newness-reposted">Reposted</span>'
+          : n === 'new'
+          ? '<span class="newness-badge newness-new">New</span>'
           : '';
         const postedStr = j.posted_date_normalized ? formatDate(j.posted_date_normalized) : escHtml(j.posted_text_raw || '–');
         return `
