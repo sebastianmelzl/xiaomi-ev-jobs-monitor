@@ -19,8 +19,8 @@ async function renderOverview() {
 
     content.innerHTML = `
       <div class="kpi-grid">
-        ${kpiCard('Active Jobs', overview.active_jobs_count, 'accent', `As of ${lastUpdate}`)}
-        ${kpiCard('EV Relevant', overview.ev_jobs_count, 'green', 'core + likely + maybe')}
+        ${kpiCard('EV Jobs (active)', overview.ev_jobs_count, 'accent', `As of ${lastUpdate}`)}
+        ${kpiCard('Total Active', overview.active_jobs_count, '', 'incl. unclassified')}
         ${kpiCard('New (last run)', overview.new_jobs_since_last_run, overview.new_jobs_since_last_run > 0 ? 'accent' : '', '')}
         ${kpiCard('Missing', overview.missing_jobs_count, overview.missing_jobs_count > 0 ? 'yellow' : '', 'below archive threshold')}
         ${kpiCard('Archived', overview.archived_jobs_count, '', 'threshold reached')}
@@ -56,7 +56,6 @@ async function renderOverview() {
             ${evLabelStat('Core EV', overview.ev_label_breakdown.core_ev, 'core-ev')}
             ${evLabelStat('Likely EV', overview.ev_label_breakdown.likely_ev, 'likely-ev')}
             ${evLabelStat('Maybe EV', overview.ev_label_breakdown.maybe_ev, 'maybe-ev')}
-            ${evLabelStat('Non-EV', overview.ev_label_breakdown.non_ev, 'non-ev')}
           </div>
         </div>
       </div>

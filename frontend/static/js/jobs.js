@@ -1,7 +1,7 @@
 /* EV Jobs table page */
 let jobsState = {
   page: 1, pageSize: 50, total: 0,
-  search: '', status: 'active', evLabel: '', evOnly: true,
+  search: '', status: 'active', evLabel: '',
   sortBy: 'first_seen_at', sortDir: 'desc',
 };
 
@@ -23,12 +23,7 @@ async function renderJobs() {
           <option value="core_ev" ${jobsState.evLabel === 'core_ev' ? 'selected' : ''}>Core EV</option>
           <option value="likely_ev" ${jobsState.evLabel === 'likely_ev' ? 'selected' : ''}>Likely EV</option>
           <option value="maybe_ev" ${jobsState.evLabel === 'maybe_ev' ? 'selected' : ''}>Maybe EV</option>
-          <option value="non_ev" ${jobsState.evLabel === 'non_ev' ? 'selected' : ''}>Non-EV</option>
         </select>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);cursor:pointer">
-          <input type="checkbox" id="jobEvOnly" ${jobsState.evOnly ? 'checked' : ''} />
-          EV only
-        </label>
         <div class="filters-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">
           ↓ Export CSV
@@ -60,11 +55,6 @@ async function renderJobs() {
     jobsState.page = 1;
     loadJobsTable();
   });
-  document.getElementById('jobEvOnly').addEventListener('change', (e) => {
-    jobsState.evOnly = e.target.checked;
-    jobsState.page = 1;
-    loadJobsTable();
-  });
 
   loadJobsTable();
 }
@@ -84,7 +74,7 @@ async function loadJobsTable() {
     if (jobsState.search) params.search = jobsState.search;
     if (jobsState.status) params.status = jobsState.status;
     if (jobsState.evLabel) params.ev_label = jobsState.evLabel;
-    if (jobsState.evOnly) params.ev_only = 'true';
+    else params.ev_only = 'true';
 
     const data = await API.jobs(params);
     jobsState.total = data.total;
