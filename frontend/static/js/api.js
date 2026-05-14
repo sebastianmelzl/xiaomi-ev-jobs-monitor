@@ -16,6 +16,7 @@ async function apiFetch(path, options = {}) {
 const API = {
   overview: () => apiFetch('/overview'),
   jobs: (params = {}) => apiFetch('/jobs?' + new URLSearchParams(params)),
+  jobDepartments: () => apiFetch('/jobs/departments'),
   job: (id) => apiFetch(`/jobs/${id}`),
   jobApplicants: (id) => apiFetch(`/jobs/${id}/applicants-history`),
   jobChanges: (id) => apiFetch(`/jobs/${id}/changes`),

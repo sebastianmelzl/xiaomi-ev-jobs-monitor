@@ -81,6 +81,23 @@ def _build_job_list_item(job: Job) -> JobListItem:
     )
 
 
+@router.get("/jobs/departments")
+def list_departments(db: Session = Depends(get_db)):
+    """Return distinct non-null departments for active EV jobs."""
+    rows = db.execute(
+        select(Job.department)
+        .join(JobEVClassification, Job.id == JobEVClassification.job_id)
+        .where(
+            Job.status == JobStatus.active,
+            Job.department.isnot(None),
+            JobEVClassification.ev_label == EVLabel.core_ev,
+        )
+        .distinct()
+        .order_by(Job.department)
+    ).scalars().all()
+    return [r for r in rows if r]
+
+
 @router.get("/jobs", response_model=PaginatedJobs)
 def list_jobs(
     page: int = Query(1, ge=1),
@@ -89,9 +106,10 @@ def list_jobs(
     status: Optional[str] = Query(None),
     ev_label: Optional[str] = Query(None),
     location: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
     ev_only: bool = Query(False),
-    sort_by: str = Query("first_seen_at"),
-    sort_dir: str = Query("desc"),
+    sort_by: str = Query("department"),
+    sort_dir: str = Query("asc"),
     db: Session = Depends(get_db),
 ):
     query = (
@@ -134,6 +152,9 @@ def list_jobs(
 
     if location:
         query = query.where(Job.location.ilike(f"%{location}%"))
+
+    if department:
+        query = query.where(Job.department == department)
 
     # Total count
     count_query = select(func.count()).select_from(query.subquery())

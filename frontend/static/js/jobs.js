@@ -1,27 +1,37 @@
 /* EV Jobs table page */
 let jobsState = {
   page: 1, pageSize: 50, total: 0,
-  search: '', status: 'active', evLabel: '',
-  sortBy: 'first_seen_at', sortDir: 'desc',
+  search: '', status: 'active', evLabel: '', department: '',
+  sortBy: 'department', sortDir: 'asc',
 };
 
 async function renderJobs() {
   setPageTitle('EV Jobs', 'Active & monitored roles');
   const content = document.getElementById('content');
 
+  // Fetch departments for filter dropdown
+  let departments = [];
+  try { departments = await API.jobDepartments(); } catch (_) {}
+
+  const deptOptions = departments.map(d =>
+    `<option value="${escHtml(d)}" ${jobsState.department === d ? 'selected' : ''}>${escHtml(d)}</option>`
+  ).join('');
+
   content.innerHTML = `
     <div class="section">
       <div class="filters-bar">
-        <input type="text" class="search-input" id="jobSearch" placeholder="Search title, location, department…" value="${jobsState.search}" />
+        <input type="text" class="search-input" id="jobSearch" placeholder="Search title, location…" value="${jobsState.search}" />
+        <select class="filter-select" id="jobDept">
+          <option value="" ${jobsState.department === '' ? 'selected' : ''}>All departments</option>
+          ${deptOptions}
+        </select>
         <select class="filter-select" id="jobStatus">
           <option value="active" ${jobsState.status === 'active' ? 'selected' : ''}>Active</option>
           <option value="missing" ${jobsState.status === 'missing' ? 'selected' : ''}>Missing</option>
           <option value="" ${jobsState.status === '' ? 'selected' : ''}>All statuses</option>
         </select>
         <div class="filters-spacer"></div>
-        <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">
-          ↓ Export CSV
-        </button>
+        <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">↓ Export CSV</button>
       </div>
       <div id="jobsTableWrap">
         ${loadingHtml()}
@@ -29,7 +39,6 @@ async function renderJobs() {
     </div>
   `;
 
-  // Event bindings
   let searchTimeout;
   document.getElementById('jobSearch').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
@@ -38,6 +47,11 @@ async function renderJobs() {
       jobsState.page = 1;
       loadJobsTable();
     }, 300);
+  });
+  document.getElementById('jobDept').addEventListener('change', (e) => {
+    jobsState.department = e.target.value;
+    jobsState.page = 1;
+    loadJobsTable();
   });
   document.getElementById('jobStatus').addEventListener('change', (e) => {
     jobsState.status = e.target.value;
@@ -62,8 +76,8 @@ async function loadJobsTable() {
     };
     if (jobsState.search) params.search = jobsState.search;
     if (jobsState.status) params.status = jobsState.status;
-    if (jobsState.evLabel) params.ev_label = jobsState.evLabel;
-    else params.ev_only = 'true';
+    if (jobsState.department) params.department = jobsState.department;
+    params.ev_only = 'true';
 
     const data = await API.jobs(params);
     jobsState.total = data.total;
@@ -87,7 +101,7 @@ async function loadJobsTable() {
               <th data-col="ev_score" class="${jobsState.sortBy === 'ev_score' ? 'sort-' + jobsState.sortDir : ''}">Score</th>
               <th data-col="title">Title</th>
               <th data-col="location">Location</th>
-              <th data-col="department">Department</th>
+              <th data-col="department" class="${jobsState.sortBy === 'department' ? 'sort-' + jobsState.sortDir : ''}">Department</th>
               <th data-col="posted_date_normalized" class="${jobsState.sortBy === 'posted_date_normalized' ? 'sort-' + jobsState.sortDir : ''}">Posted</th>
               <th data-col="applicant_count_current">Applicants</th>
               <th data-col="delta_24h">24h Δ</th>
@@ -107,7 +121,7 @@ async function loadJobsTable() {
     document.querySelectorAll('#jobsTable th[data-col]').forEach(th => {
       th.addEventListener('click', () => {
         const col = th.dataset.col;
-        const sortable = ['ev_score', 'first_seen_at', 'last_seen_at', 'posted_date_normalized'];
+        const sortable = ['ev_score', 'department', 'first_seen_at', 'last_seen_at', 'posted_date_normalized'];
         if (!sortable.includes(col)) return;
         if (jobsState.sortBy === col) {
           jobsState.sortDir = jobsState.sortDir === 'desc' ? 'asc' : 'desc';
