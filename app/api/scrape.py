@@ -15,7 +15,7 @@ router = APIRouter()
 _active_run_id: Optional[int] = None
 
 
-def _run_scrape_sync(source_names: Optional[List[str]] = None) -> None:
+def _run_scrape_sync(source_names: Optional[List[str]] = None, run_id: Optional[int] = None) -> None:
     """Runs the async scraper in a new event loop (used by BackgroundTasks)."""
     global _active_run_id
     from app.scraper.runner import ScrapeRunner
@@ -23,7 +23,7 @@ def _run_scrape_sync(source_names: Optional[List[str]] = None) -> None:
     db = SessionLocal()
     try:
         runner = ScrapeRunner(db)
-        run = asyncio.run(runner.run(source_names=source_names))
+        run = asyncio.run(runner.run(source_names=source_names, existing_run_id=run_id))
         _active_run_id = None
         logger.info(f"Background scrape run {run.id} finished: {run.status}")
     except Exception as e:
@@ -53,7 +53,7 @@ def trigger_scrape(
     db.refresh(run)
     _active_run_id = run.id
 
-    background_tasks.add_task(_run_scrape_sync, request.source_names)
+    background_tasks.add_task(_run_scrape_sync, request.source_names, run.id)
 
     return ScrapeResponse(run_id=run.id, message="Scrape started", started=True)
 

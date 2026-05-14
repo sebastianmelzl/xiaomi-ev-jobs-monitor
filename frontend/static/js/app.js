@@ -81,6 +81,8 @@ async function triggerScrape() {
 
 let _statusInterval = null;
 
+let _lastKnownRunId = null;
+
 async function pollScrapeStatus() {
   const dot = document.getElementById('scrapeStatusDot');
   try {
@@ -91,6 +93,12 @@ async function pollScrapeStatus() {
       if (!_statusInterval) {
         _statusInterval = setInterval(pollScrapeStatus, 5000);
       }
+      // If runs page is open and a new run just started, re-render it to show live log
+      const hash = window.location.hash.replace('#', '') || '/';
+      if (hash === '/runs' && s.active_run_id !== _lastKnownRunId) {
+        _lastKnownRunId = s.active_run_id;
+        renderRuns();
+      }
     } else {
       dot.className = 'scrape-status-dot';
       dot.title = 'Idle';
@@ -98,6 +106,7 @@ async function pollScrapeStatus() {
         clearInterval(_statusInterval);
         _statusInterval = null;
       }
+      _lastKnownRunId = null;
     }
   } catch {
     dot.className = 'scrape-status-dot error';

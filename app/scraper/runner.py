@@ -33,6 +33,7 @@ class ScrapeRunner:
         self,
         source_names: Optional[List[str]] = None,
         enrich_details: bool = True,
+        existing_run_id: Optional[int] = None,
     ) -> ScrapeRun:
         sources = load_sources()
         if source_names:
@@ -40,15 +41,26 @@ class ScrapeRunner:
         else:
             sources = [s for s in sources if s.get("enabled", True)]
 
-        run = ScrapeRun(
-            source_name=",".join(s["name"] for s in sources),
-            source_url=";".join(s["url"] for s in sources),
-            started_at=datetime.utcnow(),
-            status=RunStatus.running,
-        )
-        self.db.add(run)
-        self.db.commit()
-        self.db.refresh(run)
+        if existing_run_id:
+            from sqlalchemy import select as sa_select
+            run = self.db.execute(
+                sa_select(ScrapeRun).where(ScrapeRun.id == existing_run_id)
+            ).scalar_one()
+            run.source_name = ",".join(s["name"] for s in sources)
+            run.source_url = ";".join(s["url"] for s in sources)
+            run.started_at = datetime.utcnow()
+            run.status = RunStatus.running
+            self.db.commit()
+        else:
+            run = ScrapeRun(
+                source_name=",".join(s["name"] for s in sources),
+                source_url=";".join(s["url"] for s in sources),
+                started_at=datetime.utcnow(),
+                status=RunStatus.running,
+            )
+            self.db.add(run)
+            self.db.commit()
+            self.db.refresh(run)
 
         log_buffer.init_run(run.id)
         _log(run.id, "INFO", f"Run #{run.id} started — {len(sources)} sources")
