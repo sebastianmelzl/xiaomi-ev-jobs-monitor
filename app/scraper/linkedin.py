@@ -36,6 +36,21 @@ def _delay() -> None:
     time.sleep(random.uniform(SCRAPER_MIN_DELAY, SCRAPER_MAX_DELAY))
 
 
+_KEEP_TAGS = {"ul", "ol", "li", "p", "strong", "em", "b", "i", "br", "h1", "h2", "h3", "h4"}
+
+
+def _sanitize_description(div) -> str:
+    """
+    Preserve LinkedIn's structural HTML (ul/li/p/strong) and strip everything else.
+    Returns sanitized inner HTML, capped at 8000 chars.
+    """
+    for tag in div.find_all(True):
+        tag.attrs = {}          # strip all attributes (href, class, style …)
+        if tag.name not in _KEEP_TAGS:
+            tag.unwrap()        # remove tag but keep its text/children
+    return div.decode_contents().strip()[:8000]
+
+
 class LinkedInScraper:
     """Sync scraper using LinkedIn's public guest API endpoints."""
 
@@ -98,7 +113,7 @@ class LinkedInScraper:
                 or soup.find("div", class_=re.compile(r"decorated-job-posting__details"))
             )
             if desc_div:
-                job["description"] = desc_div.get_text(separator="\n", strip=True)[:5000]
+                job["description"] = _sanitize_description(desc_div)
 
             for item in soup.find_all("li", class_=re.compile(r"description__job-criteria-item")):
                 label = item.find("h3")

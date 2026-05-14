@@ -175,34 +175,47 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeJobModal();
 });
 
-/* ── Description formatter ───────────────────────────────────────────────── */
-const _BULLET_RE   = /^[•·▪◦✓✔*\-–—]\s+(.+)/;
-const _NUMBERED_RE = /^(\d+)[.)]\s+(.+)/;
+/* ── Description renderer ────────────────────────────────────────────────── */
 
+/**
+ * Render job description as formatted HTML.
+ *
+ * New jobs: description_text is sanitized LinkedIn HTML (ul/li/p/strong).
+ *           → inject directly, CSS handles styling via .desc-body selectors.
+ *
+ * Old jobs: description_text is plain text with \n separators.
+ *           → parse into headings, bullets, paragraphs.
+ */
 function formatDescription(text) {
   if (!text) return '';
 
-  const lines = text.split('\n').map(l => l.trim());
-  const out = [];
-  const bullets = [];
-
-  function flushBullets() {
-    if (!bullets.length) return;
-    out.push(`<ul class="desc-list">${bullets.map(b => `<li>${escHtml(b)}</li>`).join('')}</ul>`);
-    bullets.length = 0;
+  // HTML path: LinkedIn HTML preserved by scraper (new jobs)
+  if (/<(ul|ol|li|p|strong|em|h[1-4])\b/i.test(text)) {
+    return text;  // already safe — scraper stripped all attrs/scripts
   }
 
-  function isHeading(line, nextLines) {
+  // Plain-text path: old jobs or jobs without enriched HTML
+  const _BULLET   = /^[•·▪◦✓✔\-–—]\s+(.+)/;
+  const _NUMBERED = /^(\d+)[.)]\s+(.+)/;
+
+  const lines = text.split('\n').map(l => l.trim());
+  const out = [];
+  const buf = [];   // bullet buffer
+
+  function flush() {
+    if (!buf.length) return;
+    out.push(`<ul>${buf.map(b => `<li>${escHtml(b)}</li>`).join('')}</ul>`);
+    buf.length = 0;
+  }
+
+  function looksLikeHeading(line, rest) {
     if (!line || line.length > 120) return false;
-    // Ends with colon
     if (line.endsWith(':')) return true;
-    // ALL CAPS (and contains at least one letter)
     if (line === line.toUpperCase() && /[A-Z]/.test(line) && line.length >= 3) return true;
-    // Short line immediately followed by a bullet list
     if (line.length < 80) {
-      for (const nl of nextLines.slice(0, 4)) {
-        if (!nl) continue;
-        if (_BULLET_RE.test(nl) || _NUMBERED_RE.test(nl)) return true;
+      for (const nx of rest.slice(0, 4)) {
+        if (!nx) continue;
+        if (_BULLET.test(nx) || _NUMBERED.test(nx)) return true;
         break;
       }
     }
@@ -211,25 +224,22 @@ function formatDescription(text) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (!line) { flush(); continue; }
 
-    if (!line) { flushBullets(); continue; }
+    const bm = _BULLET.exec(line);
+    if (bm) { buf.push(bm[1]); continue; }
 
-    // Bullet / numbered list item
-    const bm = _BULLET_RE.exec(line);
-    if (bm) { bullets.push(bm[1]); continue; }
-    const nm = _NUMBERED_RE.exec(line);
-    // Guard: "3+ years" is NOT a numbered list item
-    if (nm && !line.match(/^\d+[+\-]?\s*\w/)) { bullets.push(nm[2]); continue; }
+    const nm = _NUMBERED.exec(line);
+    if (nm) { buf.push(nm[2]); continue; }
 
-    flushBullets();
+    flush();
 
-    if (isHeading(line, lines.slice(i + 1))) {
-      out.push(`<div class="desc-heading">${escHtml(line.replace(/:$/, ''))}</div>`);
+    if (looksLikeHeading(line, lines.slice(i + 1))) {
+      out.push(`<p class="desc-heading">${escHtml(line.replace(/:$/, ''))}</p>`);
     } else {
-      out.push(`<p class="desc-para">${escHtml(line)}</p>`);
+      out.push(`<p>${escHtml(line)}</p>`);
     }
   }
-
-  flushBullets();
+  flush();
   return out.join('');
 }

@@ -840,59 +840,76 @@ a { color: inherit; text-decoration: none; }
 .meta-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .meta-value { font-size: 13.5px; font-weight: 500; }
 
-/* ── Job description (formatted) ─────────────────────────────────────────── */
+/* ── Job description ─────────────────────────────────────────────────────── */
 .desc-body {
   padding: 20px 24px 24px;
+  font-size: 13.5px;
+  line-height: 1.72;
+  color: var(--text-secondary);
+  word-break: break-word;
 }
 
-.desc-heading {
+/* LinkedIn HTML tags (new jobs — HTML preserved by scraper) */
+.desc-body p,
+.desc-body p.desc-heading {
+  margin: 0 0 10px;
+}
+
+.desc-body strong, .desc-body b { color: var(--text-primary); font-weight: 600; }
+.desc-body em, .desc-body i     { font-style: italic; }
+
+.desc-body h1, .desc-body h2,
+.desc-body h3, .desc-body h4 {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
-  margin: 24px 0 10px;
-  padding-bottom: 8px;
+  margin: 22px 0 10px;
+  padding-bottom: 7px;
   border-bottom: 1px solid var(--border);
 }
-.desc-heading:first-child { margin-top: 0; }
+.desc-body h1:first-child, .desc-body h2:first-child,
+.desc-body h3:first-child, .desc-body h4:first-child { margin-top: 0; }
 
-.desc-para {
-  font-size: 13.5px;
-  line-height: 1.7;
-  color: var(--text-secondary);
-  margin-bottom: 10px;
-  word-break: break-word;
+/* Headings detected in plain-text path */
+.desc-body p.desc-heading {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin: 22px 0 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
 }
-.desc-para:last-child { margin-bottom: 0; }
+.desc-body p.desc-heading:first-child { margin-top: 0; }
 
-.desc-list {
+/* Lists — both LinkedIn <ul> and plain-text-parsed <ul> */
+.desc-body ul, .desc-body ol {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px;
+  margin: 0 0 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
-.desc-list li {
+.desc-body li {
   display: flex;
   gap: 10px;
-  font-size: 13.5px;
   line-height: 1.6;
-  color: var(--text-secondary);
-  word-break: break-word;
 }
 
-.desc-list li::before {
+.desc-body li::before {
   content: '';
   display: block;
+  flex-shrink: 0;
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  flex-shrink: 0;
-  margin-top: 8px;
+  margin-top: 7px;
 }
 
 .reasoning-list {
