@@ -38,6 +38,13 @@ def _delay() -> None:
 
 _KEEP_TAGS = {"ul", "ol", "li", "p", "strong", "em", "b", "i", "br", "h1", "h2", "h3", "h4"}
 
+_REPOST_KEYWORDS = ["repost", "erneut", "republish", "re-post"]
+
+
+def _is_repost_text(text: str) -> bool:
+    t = text.lower()
+    return any(kw in t for kw in _REPOST_KEYWORDS)
+
 
 def _sanitize_description(div) -> str:
     """
@@ -128,6 +135,17 @@ class LinkedInScraper:
                     job["employment_type"] = val
                 elif "function" in lbl or "department" in lbl:
                     job["department"] = val
+
+            # Repost detection from detail page (time element or top-card text)
+            detail_time = soup.find("time")
+            if detail_time:
+                detail_time_text = detail_time.get_text(" ", strip=True)
+                if _is_repost_text(detail_time_text):
+                    job["is_reposted"] = True
+            if not job.get("is_reposted"):
+                top_card = soup.find(class_=re.compile(r"top-card|primary-description|posted-time"))
+                if top_card and _is_repost_text(top_card.get_text(" ", strip=True)):
+                    job["is_reposted"] = True
 
             count_el = (
                 soup.find("figcaption", class_=re.compile(r"num-applicants"))
@@ -222,10 +240,11 @@ class LinkedInScraper:
                     datetime_attr = time_el.get("datetime", "")
                     time_text = time_el.get_text(strip=True)
                     posted_raw = datetime_attr or time_text
-                    is_reposted = any(
-                        kw in time_text.lower()
-                        for kw in ["repost", "erneut", "republish", "re-post"]
-                    )
+                    is_reposted = _is_repost_text(time_text)
+
+                # Repost text can live outside <time> — scan broader card text
+                if not is_reposted:
+                    is_reposted = _is_repost_text(card.get_text(" ", strip=True))
 
                 raw_url = ""
                 if link_el:
