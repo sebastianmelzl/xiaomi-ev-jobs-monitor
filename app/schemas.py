@@ -1,8 +1,24 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Annotated
 from pydantic import BaseModel, ConfigDict
+from pydantic.functional_serializers import PlainSerializer
 from app.models import JobStatus, EVLabel, ApplicantQuality, RunStatus, ChangeType
+
+# Naive UTC datetimes from SQLite lack tzinfo.  Appending 'Z' tells JavaScript
+# to treat the value as UTC so toLocaleDateString() converts to browser timezone.
+UTCDatetime = Annotated[
+    datetime,
+    PlainSerializer(lambda v: v.isoformat() + 'Z', return_type=str, when_used='json'),
+]
+OptUTCDatetime = Annotated[
+    Optional[datetime],
+    PlainSerializer(
+        lambda v: v.isoformat() + 'Z' if v is not None else None,
+        return_type=Optional[str],
+        when_used='json',
+    ),
+]
 
 
 # ── Applicant history ────────────────────────────────────────────────────────
@@ -11,7 +27,7 @@ class ApplicantHistoryPoint(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    observed_at: datetime
+    observed_at: UTCDatetime
     raw_applicant_text: Optional[str]
     applicant_count_exact: Optional[int]
     applicant_count_min: Optional[int]
@@ -28,7 +44,7 @@ class EVClassification(BaseModel):
     ev_label: EVLabel
     reasoning_json: List[str]
     classifier_version: str
-    classified_at: datetime
+    classified_at: UTCDatetime
 
 
 # ── Change log ────────────────────────────────────────────────────────────────
@@ -37,7 +53,7 @@ class ChangeLogEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    changed_at: datetime
+    changed_at: UTCDatetime
     field_name: Optional[str]
     old_value: Optional[str]
     new_value: Optional[str]
@@ -59,20 +75,18 @@ class JobListItem(BaseModel):
     seniority_level: Optional[str]
     job_url: Optional[str]
     posted_text_raw: Optional[str]
-    posted_date_normalized: Optional[datetime]
+    posted_date_normalized: OptUTCDatetime
     is_reposted: bool = False
     status: JobStatus
-    first_seen_at: datetime
-    last_seen_at: datetime
-    archived_at: Optional[datetime]
+    first_seen_at: UTCDatetime
+    last_seen_at: UTCDatetime
+    archived_at: OptUTCDatetime
     missing_count: int
 
-    # EV fields (joined)
     ev_label: Optional[EVLabel] = None
     ev_score: Optional[int] = None
     ev_confidence: Optional[float] = None
 
-    # Applicant aggregates (computed)
     applicant_count_current: Optional[int] = None
     applicant_count_quality: Optional[ApplicantQuality] = None
     applicant_delta_24h: Optional[int] = None
@@ -98,12 +112,12 @@ class JobDetail(BaseModel):
     canonical_url: Optional[str]
     description_text: Optional[str]
     posted_text_raw: Optional[str]
-    posted_date_normalized: Optional[datetime]
+    posted_date_normalized: OptUTCDatetime
     is_reposted: bool = False
     status: JobStatus
-    first_seen_at: datetime
-    last_seen_at: datetime
-    archived_at: Optional[datetime]
+    first_seen_at: UTCDatetime
+    last_seen_at: UTCDatetime
+    archived_at: OptUTCDatetime
     missing_count: int
     ev_classification: Optional[EVClassification] = None
     applicant_history: List[ApplicantHistoryPoint] = []
@@ -118,8 +132,8 @@ class ScrapeRunSchema(BaseModel):
     id: int
     source_name: Optional[str]
     source_url: Optional[str]
-    started_at: datetime
-    finished_at: Optional[datetime]
+    started_at: UTCDatetime
+    finished_at: OptUTCDatetime
     status: RunStatus
     jobs_seen_count: int
     jobs_inserted_count: int
@@ -150,7 +164,7 @@ class OverviewResponse(BaseModel):
     new_jobs_since_last_run: int
     archived_jobs_count: int
     missing_jobs_count: int
-    last_scrape_at: Optional[datetime]
+    last_scrape_at: OptUTCDatetime
     last_scrape_status: Optional[str]
     ev_label_breakdown: EVLabelBreakdown
     top_locations: List[TopLocation]
@@ -168,7 +182,7 @@ class PaginatedJobs(BaseModel):
 # ── Scrape trigger ────────────────────────────────────────────────────────────
 
 class ScrapeRequest(BaseModel):
-    source_names: Optional[List[str]] = None  # None = run all enabled sources
+    source_names: Optional[List[str]] = None
 
 
 class ScrapeResponse(BaseModel):
