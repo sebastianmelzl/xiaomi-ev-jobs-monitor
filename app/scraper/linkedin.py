@@ -175,10 +175,22 @@ class LinkedInScraper:
     def _paginate(self, max_results: int, company: str, **params) -> List[Dict]:
         jobs: List[Dict] = []
         seen_ids: set = set()
+        consecutive_empty = 0
         for start in range(0, max_results, 25):
             cards = self._fetch_cards(start=start, **params)
             if not cards:
-                break
+                consecutive_empty += 1
+                if consecutive_empty >= 2:
+                    # Two empty pages in a row → genuinely no more results
+                    break
+                # Single empty page may be a transient rate-limit hiccup — wait and retry once
+                logger.debug(f"Empty page at start={start}, retrying after delay")
+                time.sleep(random.uniform(4, 7))
+                cards = self._fetch_cards(start=start, **params)
+                if not cards:
+                    break
+            else:
+                consecutive_empty = 0
             for job in self._parse_cards(cards, company):
                 jid = job.get("linkedin_job_id")
                 if jid and jid in seen_ids:

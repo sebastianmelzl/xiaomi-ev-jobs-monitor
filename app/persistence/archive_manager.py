@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.models import Job, JobChangeLog, JobRunPresence, JobStatus, ChangeType
 
-ARCHIVE_THRESHOLD = int(os.getenv("ARCHIVE_MISSING_THRESHOLD", "3"))
+ARCHIVE_THRESHOLD = int(os.getenv("ARCHIVE_MISSING_THRESHOLD", "5"))
 
 
 class ArchiveManager:

@@ -89,14 +89,11 @@ class ScrapeRunner:
                         unique_jobs = []
                         for j in xiaomi_jobs:
                             key = j.get("canonical_job_key")
-                            title_key = f"{(j.get('title') or '').strip().lower()}|{(j.get('company') or '').strip().lower()}"
-                            if key in seen_this_run or title_key in seen_this_run:
+                            if key and key in seen_this_run:
                                 continue
                             unique_jobs.append(j)
                             if key:
                                 seen_this_run.add(key)
-                            if title_key:
-                                seen_this_run.add(title_key)
                         dupes = len(xiaomi_jobs) - len(unique_jobs)
 
                         msg = f"  Found {len(raw_jobs)} jobs"

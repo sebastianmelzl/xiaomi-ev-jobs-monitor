@@ -147,6 +147,7 @@ class JobStore:
         if was_archived:
             old_status = job.status.value
             job.status = JobStatus.active
+            job.archived_at = None
             self._log_change(job.id, ChangeType.reactivation, "status", old_status, "active", now)
             changed = True
         elif job.status != JobStatus.active:
