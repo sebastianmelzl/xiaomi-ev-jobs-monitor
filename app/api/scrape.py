@@ -44,6 +44,15 @@ def trigger_scrape(
             status_code=409,
             detail=f"A scrape run is already in progress (run_id={_active_run_id})"
         )
+    # Secondary DB-level check — catches edge cases (multi-worker or missed cleanup)
+    db_run = db.execute(
+        select(ScrapeRun).where(ScrapeRun.status == RunStatus.running)
+    ).scalar_one_or_none()
+    if db_run:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A scrape run is already in progress (run_id={db_run.id})"
+        )
 
     # Create a placeholder run record immediately so UI can show it
     run = ScrapeRun(status=RunStatus.running, source_name="manual")

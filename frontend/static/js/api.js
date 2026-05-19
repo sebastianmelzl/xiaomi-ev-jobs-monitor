@@ -44,4 +44,5 @@ const API = {
   chartsJobsByDepartment: () => apiFetch('/charts/jobs-by-department'),
   exportEVJobs: () => window.open('/api/export/ev-jobs.csv', '_blank'),
   resetAllData: () => apiFetch('/admin/reset', { method: 'POST' }),
+  enrichMissing: () => apiFetch('/admin/enrich-missing', { method: 'POST' }),
 };

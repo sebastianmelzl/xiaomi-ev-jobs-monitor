@@ -43,6 +43,26 @@ def init_db() -> None:
     _normalize_locations()
     _normalize_departments()
     _dedup_jobs()
+    _reset_stale_runs()
+
+
+def _reset_stale_runs() -> None:
+    """On startup, mark any runs still in 'running' state as failed (crash recovery)."""
+    from app.models import ScrapeRun, RunStatus
+    from sqlalchemy import select
+    from datetime import datetime
+    from loguru import logger
+    with SessionLocal() as db:
+        stale = db.execute(
+            select(ScrapeRun).where(ScrapeRun.status == RunStatus.running)
+        ).scalars().all()
+        for run in stale:
+            run.status = RunStatus.failed
+            run.notes = (run.notes or "") + " [reset: process restarted mid-run]"
+            run.finished_at = datetime.utcnow()
+        if stale:
+            db.commit()
+            logger.warning(f"Reset {len(stale)} stale running scrape run(s) on startup")
 
 
 def _add_missing_columns() -> None:

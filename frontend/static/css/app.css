@@ -654,6 +654,38 @@ a { color: inherit; text-decoration: none; }
 .delta::before { content: "+"; }
 .delta.negative::before { content: ""; }
 
+/* ── Applicant momentum summary ───────────────────────────────────────────── */
+.applicant-trend-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.trend-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  min-width: 64px;
+}
+.trend-chip-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 600;
+}
+.trend-chip-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Filters bar ──────────────────────────────────────────────────────────── */
 .filters-bar {
   display: flex;

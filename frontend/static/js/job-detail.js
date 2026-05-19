@@ -96,20 +96,7 @@ async function openJobModal(jobId) {
         </div>
         <div class="section-body">
           <div id="applicantChart" style="height:180px"></div>
-          ${history.length > 0 ? `
-            <div style="margin-top:12px;display:flex;gap:20px;font-size:12px;color:var(--text-muted)">
-              ${(() => {
-                const latest = history[history.length - 1];
-                const current = latest.applicant_count_exact ?? latest.applicant_count_min;
-                const quality = latest.applicant_count_quality;
-                return `
-                  <span>Latest: <strong>${current != null ? current + (quality === 'lower_bound' ? '+' : '') : '–'}</strong></span>
-                  <span>Quality: <strong>${quality}</strong></span>
-                  <span>Raw: <em>${escHtml(latest.raw_applicant_text || '–')}</em></span>
-                `;
-              })()}
-            </div>
-          ` : ''}
+          ${applicantMomentumSummary(history)}
         </div>
       </div>
 
@@ -222,6 +209,52 @@ async function toggleReposted(jobId, btn) {
   } catch (err) {
     showToast('Could not update: ' + err.message, 'error');
   }
+}
+
+function applicantMomentumSummary(history) {
+  if (!history || history.length === 0) return '';
+  const latest = history[history.length - 1];
+  const current = latest.applicant_count_exact ?? latest.applicant_count_min;
+  if (current == null) return '';
+
+  const now = Date.now();
+  let delta24h = null, delta7d = null;
+  for (let i = history.length - 2; i >= 0; i--) {
+    const t = new Date(history[i].observed_at).getTime();
+    const v = history[i].applicant_count_exact ?? history[i].applicant_count_min;
+    if (v != null) {
+      if (delta24h == null && t <= now - 86_400_000) delta24h = current - v;
+      if (delta7d  == null && t <= now - 604_800_000) delta7d  = current - v;
+    }
+  }
+
+  function deltaTag(val) {
+    if (val == null) return '<span class="text-muted" style="font-size:13px">–</span>';
+    const cls = val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral';
+    return `<span class="delta ${cls}" style="font-size:14px">${val}</span>`;
+  }
+
+  const quality = latest.applicant_count_quality;
+  return `
+    <div class="applicant-trend-row">
+      <div class="trend-chip">
+        <span class="trend-chip-label">Current</span>
+        <span class="trend-chip-val">${current}${quality === 'lower_bound' ? '+' : ''}</span>
+      </div>
+      <div class="trend-chip">
+        <span class="trend-chip-label">24h Δ</span>
+        ${deltaTag(delta24h)}
+      </div>
+      <div class="trend-chip">
+        <span class="trend-chip-label">7d Δ</span>
+        ${deltaTag(delta7d)}
+      </div>
+      <div class="trend-chip" style="flex:1;align-items:flex-start;min-width:0">
+        <span class="trend-chip-label">Source</span>
+        <span style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(latest.raw_applicant_text || quality)}</span>
+      </div>
+    </div>
+  `;
 }
 
 // Close modal on Escape key

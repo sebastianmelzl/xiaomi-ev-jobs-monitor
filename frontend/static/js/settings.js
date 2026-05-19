@@ -109,6 +109,20 @@ async function renderSettings() {
         <div id="hiddenJobsContent">${loadingHtml()}</div>
       </div>
 
+      <!-- Maintenance -->
+      <div class="settings-section">
+        <div class="section-header"><span class="section-title">Maintenance</span></div>
+        <div class="section-body" style="display:flex;flex-direction:column;gap:12px">
+          <div class="danger-row">
+            <div>
+              <div class="danger-action-title">Enrich missing descriptions</div>
+              <div class="danger-action-sub">Fetches the full job description from LinkedIn for any job that has none. Runs in the background — check the scrape logs for progress.</div>
+            </div>
+            <button class="btn btn-secondary" id="btnEnrichMissing" onclick="runEnrichMissing(this)">Fetch Descriptions</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Danger zone -->
       <div class="settings-section danger-zone">
         <div class="section-header">
@@ -197,6 +211,20 @@ async function unhideJob(jobId) {
     showToast('Job unhidden — will reappear in EV Jobs list', 'success');
   } catch (err) {
     showToast('Could not unhide: ' + err.message, 'error');
+  }
+}
+
+async function runEnrichMissing(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    const result = await API.enrichMissing();
+    showToast(result.message, 'success');
+    btn.textContent = result.queued > 0 ? `Enriching ${result.queued} jobs…` : 'Nothing to enrich';
+  } catch (err) {
+    showToast('Failed: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Fetch Descriptions';
   }
 }
 
