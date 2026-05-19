@@ -70,6 +70,9 @@ class ScrapeRunner:
         total_updated = 0
         total_errors = 0
 
+        archived_count = 0
+        reactivated_count = 0
+
         try:
             with LinkedInScraper() as scraper:
                 for source in sources:
@@ -132,6 +135,10 @@ class ScrapeRunner:
                         _log(run.id, "ERROR", f"  Source {source['name']} failed: {e}")
                         total_errors += 1
 
+                # Archive pass and validation inside the scraper context (validation needs HTTP)
+                archived_count = self.archive.process_missing(run.id, seen_canonical_keys)
+                reactivated_count = self.archive.validate_archived_jobs(scraper)
+
         except Exception as e:
             _log(run.id, "ERROR", f"Run failed: {e}")
             run.status = RunStatus.failed
@@ -140,8 +147,6 @@ class ScrapeRunner:
             run.finished_at = datetime.utcnow()
             self.db.commit()
             return run
-
-        archived_count = self.archive.process_missing(run.id, seen_canonical_keys)
 
         run.jobs_inserted_count = total_inserted
         run.jobs_updated_count = total_updated
@@ -154,6 +159,6 @@ class ScrapeRunner:
         _log(run.id, "INFO",
              f"Run #{run.id} done — seen={run.jobs_seen_count} "
              f"new={total_inserted} updated={total_updated} "
-             f"archived={archived_count} errors={total_errors}")
+             f"archived={archived_count} reactivated={reactivated_count} errors={total_errors}")
         log_buffer.clear_old(keep_last=5)
         return run

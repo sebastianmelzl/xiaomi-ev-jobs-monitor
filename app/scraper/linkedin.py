@@ -98,6 +98,15 @@ class LinkedInScraper:
             )
         return []
 
+    def job_exists(self, job_id: str) -> bool:
+        """Return True if the LinkedIn job page still loads (HTTP 200)."""
+        try:
+            resp = self._session.get(_GUEST_DETAIL.format(job_id), timeout=15)
+            _delay()
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     def enrich_job_details(self, job: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch full description and criteria from the guest detail endpoint."""
         job_id = job.get("linkedin_job_id")

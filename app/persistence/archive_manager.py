@@ -7,8 +7,8 @@ Algorithm per run:
   - If a job IS seen in the run → missing_count = 0, status = active (handled by JobStore)
 """
 import os
-from datetime import datetime
-from typing import Collection
+from datetime import datetime, timedelta
+from typing import Collection, Optional
 from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -97,3 +97,60 @@ class ArchiveManager:
         self.db.commit()
         logger.info(f"Archive pass: {archived_count} jobs archived this run")
         return archived_count
+
+    def validate_archived_jobs(
+        self,
+        scraper,
+        max_age_days: Optional[int] = 60,
+    ) -> int:
+        """
+        For archived jobs, check if they still exist on LinkedIn.
+        Reactivates any that return HTTP 200 from the guest detail API.
+        Returns count of reactivated jobs.
+
+        max_age_days: only check jobs archived within this many days.
+                      Pass None to validate all archived jobs.
+        """
+        query = select(Job).where(Job.status == JobStatus.archived)
+        if max_age_days is not None:
+            cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+            query = query.where(Job.archived_at >= cutoff)
+
+        archived_jobs = self.db.execute(query).scalars().all()
+        if not archived_jobs:
+            return 0
+
+        logger.info(f"Validating {len(archived_jobs)} archived jobs against LinkedIn…")
+        reactivated = 0
+        now = datetime.utcnow()
+
+        for job in archived_jobs:
+            if not job.linkedin_job_id:
+                continue
+            try:
+                still_live = scraper.job_exists(job.linkedin_job_id)
+            except Exception as e:
+                logger.warning(f"Validation failed for job {job.id}: {e}")
+                continue
+
+            if still_live:
+                old_status = job.status.value
+                job.status = JobStatus.active
+                job.archived_at = None
+                job.missing_count = 0
+                job.last_seen_at = now
+                self.db.add(JobChangeLog(
+                    job_id=job.id,
+                    changed_at=now,
+                    field_name="status",
+                    old_value=old_status,
+                    new_value="active",
+                    change_type=ChangeType.reactivation,
+                ))
+                reactivated += 1
+                logger.debug(f"Reactivated job {job.id} [{job.title}] — still live on LinkedIn")
+
+        if reactivated:
+            self.db.commit()
+        logger.info(f"Archive validation: {reactivated}/{len(archived_jobs)} reactivated")
+        return reactivated
