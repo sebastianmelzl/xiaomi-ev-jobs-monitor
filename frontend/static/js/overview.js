@@ -1,4 +1,5 @@
-/* Overview page */
+/* Overview page — Intelligence Brief redesign */
+
 async function renderOverview() {
   setPageTitle('Overview', 'Xiaomi EV Jobs Dashboard');
   const content = document.getElementById('content');
@@ -14,13 +15,26 @@ async function renderOverview() {
     const lastUpdate = overview.last_scrape_at ? formatRelTime(overview.last_scrape_at) : 'Never';
     const scrapeStatus = overview.last_scrape_status || null;
 
+    // Build signal banner
+    const signals = _buildSignals(overview);
+    const signalBanner = signals.length > 0
+      ? `<div class="signal-banner">
+           <span class="signal-banner-icon">⚡</span>
+           <div class="signal-banner-items">
+             ${signals.map(s => `<span class="signal-item signal-${s.type}">${s.text}</span>`).join('<span class="signal-sep">·</span>')}
+           </div>
+         </div>`
+      : '';
+
     content.innerHTML = `
-      <!-- KPI row -->
+      ${signalBanner}
+
+      <!-- KPI strip -->
       <div class="ov-stats">
         <div class="ov-stat">
           <div class="ov-stat-label">Active EV Jobs</div>
           <div class="ov-stat-value is-accent">${overview.ev_jobs_count}</div>
-          <div class="ov-stat-sub">as of ${lastUpdate}</div>
+          <div class="ov-stat-sub">monitored roles</div>
         </div>
         <div class="ov-stat">
           <div class="ov-stat-label">Posted this Week</div>
@@ -30,7 +44,7 @@ async function renderOverview() {
         <div class="ov-stat">
           <div class="ov-stat-label">Missing</div>
           <div class="ov-stat-value ${overview.missing_jobs_count > 0 ? 'is-yellow' : ''}">${overview.missing_jobs_count}</div>
-          <div class="ov-stat-sub">not seen in last scrape</div>
+          <div class="ov-stat-sub">not seen last scrape</div>
         </div>
         <div class="ov-stat ov-stat--last">
           <div class="ov-stat-label">Last Scrape</div>
@@ -41,28 +55,39 @@ async function renderOverview() {
         </div>
       </div>
 
-      <!-- Charts: weekly + locations side by side -->
-      <div class="ov-charts-row">
-        <div class="ov-card">
-          <div class="ov-card-head">
-            <span class="ov-card-title">EV Jobs per Week</span>
-            <span class="ov-card-hint">last 90 days · by posted date</span>
-          </div>
-          <div class="ov-card-body">
-            <div id="chartWeekly" class="ov-chart-area"></div>
+      <!-- Two-column: signal feed + weekly chart -->
+      <div class="ov-main-row">
+        <div class="ov-col-feed">
+          <div class="ov-card">
+            <div class="ov-card-head">
+              <span class="ov-card-title">Recently Posted</span>
+              <a href="#/jobs" class="btn btn-ghost btn-sm">View all →</a>
+            </div>
+            <div id="recentJobsList"><div class="ov-card-body">${loadingHtml()}</div></div>
           </div>
         </div>
-        <div class="ov-card">
-          <div class="ov-card-head">
-            <span class="ov-card-title">Top Locations</span>
+        <div class="ov-col-chart">
+          <div class="ov-card">
+            <div class="ov-card-head">
+              <span class="ov-card-title">EV Jobs per Week</span>
+              <span class="ov-card-hint">last 90 days</span>
+            </div>
+            <div class="ov-card-body">
+              <div id="chartWeekly" class="ov-chart-area"></div>
+            </div>
           </div>
-          <div class="ov-card-body">
-            <div id="chartLocations" class="ov-chart-area"></div>
+          <div class="ov-card ov-card--mt">
+            <div class="ov-card-head">
+              <span class="ov-card-title">Top Locations</span>
+            </div>
+            <div class="ov-card-body">
+              <div id="chartLocations" class="ov-chart-area"></div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Department chart: full width -->
+      <!-- Department breakdown: full width -->
       <div class="ov-card ov-card--mb">
         <div class="ov-card-head">
           <span class="ov-card-title">Jobs by Department</span>
@@ -71,15 +96,6 @@ async function renderOverview() {
         <div class="ov-card-body">
           <div id="chartDepts" class="ov-chart-area ov-chart-area--dept"></div>
         </div>
-      </div>
-
-      <!-- Recently posted -->
-      <div class="ov-card">
-        <div class="ov-card-head">
-          <span class="ov-card-title">Recently Posted</span>
-          <a href="#/jobs" class="btn btn-ghost btn-sm">View all →</a>
-        </div>
-        <div id="recentJobsList"><div class="ov-card-body">${loadingHtml()}</div></div>
       </div>
     `;
 
@@ -114,12 +130,12 @@ async function renderOverview() {
       deptEl.innerHTML = ovEmptyChart('No department data yet');
     }
 
-    // Recently posted
+    // Recently posted feed
     try {
       const recent = await API.jobs({
         ev_only: 'true', status: 'active',
         sort_by: 'posted_date_normalized', sort_dir: 'desc',
-        page: 1, page_size: 8,
+        page: 1, page_size: 10,
       });
       const el = document.getElementById('recentJobsList');
       if (!el) return;
@@ -136,23 +152,24 @@ async function renderOverview() {
           : n === 'new'
           ? '<span class="newness-badge newness-new">New</span>'
           : '';
-        const postedStr = j.posted_date_normalized ? formatDate(j.posted_date_normalized) : escHtml(j.posted_text_raw || '–');
+        const score = j.ev_score ?? 0;
+        const postedStr = j.posted_date_normalized
+          ? formatDate(j.posted_date_normalized)
+          : escHtml(j.posted_text_raw || '–');
+        const meta = [j.department, j.location].filter(Boolean).map(escHtml).join(' · ');
+
         return `
-          <div class="ov-recent-row" onclick="openJobModal(${j.id})">
-            <div class="score-bar ov-recent-score">
-              <div class="score-track">
-                <div class="score-fill ${(j.ev_score ?? 0) >= 60 ? 'high' : 'mid'}" style="width:${j.ev_score ?? 0}%"></div>
-              </div>
-              <span class="score-num">${j.ev_score ?? 0}</span>
+          <div class="ov-feed-row" onclick="openJobModal(${j.id})">
+            <div class="ov-feed-score ${score >= 60 ? 'high' : 'mid'}">${score}</div>
+            <div class="ov-feed-body">
+              <div class="ov-feed-title">${escHtml(j.title || '–')} ${nBadge}</div>
+              <div class="ov-feed-meta">${meta}</div>
             </div>
-            <div class="ov-recent-info">
-              <div class="ov-recent-title">${escHtml(j.title || '–')}</div>
-              <div class="ov-recent-meta">${[j.department, j.location].filter(Boolean).map(escHtml).join(' · ')}</div>
-            </div>
-            <div class="ov-recent-date">${postedStr}${nBadge}</div>
+            <div class="ov-feed-date">${postedStr}</div>
           </div>
         `;
       }).join('');
+
     } catch (_) {
       const el = document.getElementById('recentJobsList');
       if (el) el.innerHTML = '<div class="ov-card-body"><p class="text-muted">Could not load recent jobs.</p></div>';
@@ -161,6 +178,22 @@ async function renderOverview() {
   } catch (err) {
     content.innerHTML = errorHtml(err.message);
   }
+}
+
+function _buildSignals(overview) {
+  const signals = [];
+  if (overview.posted_this_week >= 5) {
+    signals.push({ type: 'positive', text: `${overview.posted_this_week} new EV jobs posted this week` });
+  } else if (overview.posted_this_week > 0) {
+    signals.push({ type: 'neutral', text: `${overview.posted_this_week} new post${overview.posted_this_week > 1 ? 's' : ''} this week` });
+  }
+  if (overview.missing_jobs_count >= 10) {
+    signals.push({ type: 'warning', text: `${overview.missing_jobs_count} jobs missing from last scrape` });
+  }
+  if (overview.ev_jobs_count >= 50) {
+    signals.push({ type: 'positive', text: `${overview.ev_jobs_count} active EV roles tracked` });
+  }
+  return signals;
 }
 
 function ovEmptyChart(msg) {

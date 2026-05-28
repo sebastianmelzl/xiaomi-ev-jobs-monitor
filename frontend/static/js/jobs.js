@@ -13,6 +13,7 @@ let jobsState = {
   search: '', status: 'active',
   newOnly: false,
   collapsed: {},
+  viewMode: localStorage.getItem('jobsViewMode') || 'list',
 };
 
 // Live-update poller
@@ -84,6 +85,14 @@ async function renderJobs() {
           New Posts
         </button>
         <div class="filters-spacer"></div>
+        <div class="view-toggle" id="viewToggle">
+          <button class="view-toggle-btn ${jobsState.viewMode === 'list' ? 'active' : ''}" onclick="setJobsView('list')" title="List view">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3h12M1 7h12M1 11h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+          <button class="view-toggle-btn ${jobsState.viewMode === 'cards' ? 'active' : ''}" onclick="setJobsView('cards')" title="Card view">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>
+          </button>
+        </div>
         <button class="btn btn-secondary btn-sm" onclick="API.exportEVJobs()">↓ Export CSV</button>
       </div>
       <div id="jobsSections">${loadingHtml()}</div>
@@ -108,6 +117,20 @@ function toggleNewOnly() {
   const btn = document.getElementById('btnNewOnly');
   if (btn) btn.className = `btn btn-sm ${jobsState.newOnly ? 'btn-primary' : 'btn-secondary'}`;
   loadJobsSections();
+}
+
+function setJobsView(mode) {
+  jobsState.viewMode = mode;
+  localStorage.setItem('jobsViewMode', mode);
+  document.querySelectorAll('#viewToggle .view-toggle-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', (i === 0 && mode === 'list') || (i === 1 && mode === 'cards'));
+  });
+  const wrap = document.getElementById('jobsSections');
+  if (wrap && wrap.querySelector('.dept-section,.job-cards-grid')) {
+    // Re-render with new view mode without full reload
+    const existingCount = wrap.querySelector('.dept-section,  .job-cards-grid');
+    if (existingCount) loadJobsSections();
+  }
 }
 
 async function loadJobsSections() {
@@ -152,14 +175,19 @@ function _renderJobsInto(wrap, allItems) {
   }
   const order = [...DEPT_ORDER.filter(d => groups[d]), ...(groups['Other'] ? ['Other'] : [])];
 
-  wrap.innerHTML = `
-    <div style="font-size:12px;color:var(--text-muted);padding:0 0 12px 0">${items.length} job${items.length !== 1 ? 's' : ''}${jobsState.newOnly ? ' · New Posts filter active' : ''}</div>
-    ${order.map(dept => renderDeptSection(dept, groups[dept])).join('')}
-  `;
+  const countLine = `<div class="jobs-count-line">${items.length} job${items.length !== 1 ? 's' : ''}${jobsState.newOnly ? ' · New Posts filter active' : ''}</div>`;
 
-  wrap.querySelectorAll('.job-row').forEach(row => {
-    row.addEventListener('click', () => openJobModal(parseInt(row.dataset.id)));
-  });
+  if (jobsState.viewMode === 'cards') {
+    wrap.innerHTML = countLine + order.map(dept => renderDeptSectionCards(dept, groups[dept])).join('');
+    wrap.querySelectorAll('.job-card').forEach(card => {
+      card.addEventListener('click', () => openJobModal(parseInt(card.dataset.id)));
+    });
+  } else {
+    wrap.innerHTML = countLine + order.map(dept => renderDeptSection(dept, groups[dept])).join('');
+    wrap.querySelectorAll('.job-row').forEach(row => {
+      row.addEventListener('click', () => openJobModal(parseInt(row.dataset.id)));
+    });
+  }
 }
 
 function renderDeptSection(dept, jobs) {
@@ -259,6 +287,76 @@ function jobRow(job, dimmed = false) {
       <td><span class="badge badge-${job.status}">${job.status}</span></td>
       <td><button class="hide-job-btn" title="Permanently hide this job" onclick="hideJob(event, ${job.id})">✕</button></td>
     </tr>
+  `;
+}
+
+function renderDeptSectionCards(dept, jobs) {
+  const icon = DEPT_ICONS[dept] || '📁';
+  const isCollapsed = jobsState.collapsed[dept] || false;
+  const sectionId = `sect-cards-${dept.replace(/[^a-z]/gi, '-')}`;
+
+  return `
+    <div class="dept-section" id="${sectionId}">
+      <div class="dept-header" onclick="toggleDeptSection('${dept}', '${sectionId}')">
+        <span class="dept-icon">${icon}</span>
+        <span class="dept-name">${escHtml(dept)}</span>
+        <span class="dept-count">${jobs.length}</span>
+        <span class="dept-chevron ${isCollapsed ? 'collapsed' : ''}">▾</span>
+      </div>
+      <div class="dept-body ${isCollapsed ? 'collapsed' : ''}">
+        <div class="job-cards-grid">
+          ${jobs.map(j => jobCard(j)).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function jobCard(job) {
+  const score   = job.ev_score ?? 0;
+  const scoreClass = score >= 60 ? 'high' : 'mid';
+  const n       = jobNewness(job);
+  const nBadge  = n === 'reposted'
+    ? '<span class="newness-badge newness-reposted">Reposted</span>'
+    : n === 'new'
+    ? '<span class="newness-badge newness-new">New</span>'
+    : '';
+
+  const applicants = job.applicant_count_current;
+  const appStr = applicants != null
+    ? `${applicants}${job.applicant_count_quality === 'lower_bound' ? '+' : ''} applicants`
+    : null;
+
+  const delta24h = job.applicant_delta_24h;
+  const deltaHtml = delta24h != null
+    ? `<span class="delta ${delta24h > 0 ? 'positive' : delta24h < 0 ? 'negative' : 'neutral'}" style="font-size:12px">${delta24h > 0 ? '+' : ''}${delta24h}</span>`
+    : '';
+
+  const postedStr = job.posted_date_normalized
+    ? formatDate(job.posted_date_normalized)
+    : escHtml(job.posted_text_raw || '–');
+
+  return `
+    <div class="job-card${job.is_reposted ? ' job-card-reposted' : ''}" data-id="${job.id}">
+      <div class="job-card-top">
+        <div class="job-card-score-wrap">
+          <div class="job-card-score ${scoreClass}">${score}</div>
+        </div>
+        <div class="job-card-badges">
+          ${nBadge}
+          <span class="badge badge-${job.status}">${job.status}</span>
+        </div>
+        <button class="hide-job-btn" title="Hide job" onclick="hideJob(event, ${job.id})">✕</button>
+      </div>
+      <div class="job-card-title">${escHtml(job.title || '–')}</div>
+      <div class="job-card-meta">
+        ${job.location ? `<span>${escHtml(job.location)}</span>` : ''}
+        ${appStr ? `<span>${escHtml(appStr)}${deltaHtml ? ' ' + deltaHtml : ''}</span>` : ''}
+      </div>
+      <div class="job-card-footer">
+        <span class="job-card-date">${postedStr}</span>
+      </div>
+    </div>
   `;
 }
 
