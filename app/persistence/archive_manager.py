@@ -66,7 +66,9 @@ class ArchiveManager:
                     f"Archived job {job.id} [{job.title}] "
                     f"after {job.missing_count} missing runs"
                 )
-            else:
+            elif job.missing_count >= 2:
+                # Only surface as "missing" after 2 consecutive absences —
+                # single-run blips (LinkedIn pagination noise) stay silently active.
                 old_status = job.status.value
                 job.status = JobStatus.missing
                 if old_status != "missing":
@@ -78,6 +80,7 @@ class ArchiveManager:
                         new_value="missing",
                         change_type=ChangeType.status_change,
                     ))
+            # missing_count == 1: stay active, don't emit a signal yet
 
             # Record absence in run presence
             existing = self.db.execute(

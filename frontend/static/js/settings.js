@@ -51,7 +51,7 @@ async function renderSettings() {
         </div>
         <div class="settings-row">
           <span class="settings-key">ARCHIVE_MISSING_THRESHOLD</span>
-          <span class="settings-val">3 runs (default)</span>
+          <span class="settings-val">5 runs (default) · visible as missing after 2</span>
         </div>
         <div class="settings-row">
           <span class="settings-key">SCRAPER_HEADLESS</span>

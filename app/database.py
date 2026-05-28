@@ -44,6 +44,7 @@ def init_db() -> None:
     _normalize_departments()
     _dedup_jobs()
     _reset_stale_runs()
+    _repair_single_miss_jobs()
 
 
 def _reset_stale_runs() -> None:
@@ -63,6 +64,29 @@ def _reset_stale_runs() -> None:
         if stale:
             db.commit()
             logger.warning(f"Reset {len(stale)} stale running scrape run(s) on startup")
+
+
+def _repair_single_miss_jobs() -> None:
+    """Reset jobs that are 'missing' with missing_count=1 back to active.
+
+    These are false positives from the old logic that surfaced any single-run
+    absence as missing. With the new 2-run grace period they should stay active.
+    """
+    from app.models import Job, JobStatus
+    from sqlalchemy import select
+    from loguru import logger
+    with SessionLocal() as db:
+        stale = db.execute(
+            select(Job).where(
+                Job.status == JobStatus.missing,
+                Job.missing_count == 1,
+            )
+        ).scalars().all()
+        for job in stale:
+            job.status = JobStatus.active
+        if stale:
+            db.commit()
+            logger.info(f"Repaired {len(stale)} single-miss false-positive job(s) → active")
 
 
 def _add_missing_columns() -> None:
