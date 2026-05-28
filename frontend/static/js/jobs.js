@@ -184,8 +184,8 @@ function _renderJobsInto(wrap, allItems) {
     });
   } else {
     wrap.innerHTML = countLine + order.map(dept => renderDeptSection(dept, groups[dept])).join('');
-    wrap.querySelectorAll('.job-row').forEach(row => {
-      row.addEventListener('click', () => openJobModal(parseInt(row.dataset.id)));
+    wrap.querySelectorAll('.job-item').forEach(item => {
+      item.addEventListener('click', () => openJobModal(parseInt(item.dataset.id)));
     });
   }
 }
@@ -198,11 +198,9 @@ function renderDeptSection(dept, jobs) {
   const fresh    = jobs.filter(j => !j.is_reposted);
   const reposted = jobs.filter(j =>  j.is_reposted);
 
-  const repostedRows = reposted.length === 0 ? '' : `
-    <tr class="repost-divider">
-      <td colspan="8">↩ Reposted <span class="repost-divider-count">${reposted.length}</span></td>
-    </tr>
-    ${reposted.map(job => jobRow(job, true)).join('')}
+  const repostedBlock = reposted.length === 0 ? '' : `
+    <div class="job-list-divider">↩ Reposted <span>${reposted.length}</span></div>
+    ${reposted.map(job => jobItem(job, true)).join('')}
   `;
 
   return `
@@ -214,25 +212,9 @@ function renderDeptSection(dept, jobs) {
         <span class="dept-chevron ${isCollapsed ? 'collapsed' : ''}">▾</span>
       </div>
       <div class="dept-body ${isCollapsed ? 'collapsed' : ''}">
-        <div class="table-wrap">
-          <table class="data-table dept-table">
-            <thead>
-              <tr>
-                <th style="width:80px">Score</th>
-                <th>Title</th>
-                <th>Location</th>
-                <th>Posted</th>
-                <th>Applicants</th>
-                <th>24h Δ</th>
-                <th>Status</th>
-                <th style="width:32px"></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${fresh.map(job => jobRow(job)).join('')}
-              ${repostedRows}
-            </tbody>
-          </table>
+        <div class="job-list">
+          ${fresh.map(job => jobItem(job)).join('')}
+          ${repostedBlock}
         </div>
       </div>
     </div>
@@ -254,39 +236,43 @@ function newnessHtml(job) {
   return '';
 }
 
-function jobRow(job, dimmed = false) {
-  const score = job.ev_score ?? 0;
-  const scoreClass = score >= 60 ? 'high' : 'mid';
+function jobItem(job, dimmed = false) {
+  const score      = job.ev_score ?? 0;
+  const scoreClass = score >= 60 ? 'high' : score >= 35 ? 'mid' : 'low';
+
+  const n      = job.is_reposted ? null : jobNewness(job);
+  const nBadge = n === 'new' ? '<span class="newness-badge newness-new">New</span>' : '';
 
   const applicants = job.applicant_count_current;
-  const applicantDisplay = applicants != null
+  const appStr = applicants != null
     ? `${applicants}${job.applicant_count_quality === 'lower_bound' ? '+' : ''}`
-    : '<span class="text-muted">–</span>';
+    : null;
 
-  const delta24h = job.applicant_delta_24h;
+  const delta24h  = job.applicant_delta_24h;
   const deltaHtml = delta24h != null
-    ? `<span class="delta ${delta24h > 0 ? 'positive' : delta24h < 0 ? 'negative' : 'neutral'}">${delta24h > 0 ? '+' : ''}${delta24h}</span>`
-    : '<span class="text-muted">–</span>';
+    ? `<span class="delta ${delta24h > 0 ? 'positive' : delta24h < 0 ? 'negative' : 'neutral'}" style="font-size:11px">${delta24h > 0 ? '+' : ''}${delta24h}</span>`
+    : '';
 
-  const postedStr = job.posted_date_normalized ? formatDate(job.posted_date_normalized) : escHtml(job.posted_text_raw || '–');
-  const badgeHtml = job.is_reposted ? '' : newnessHtml(job);
+  const postedStr = job.posted_date_normalized
+    ? formatDate(job.posted_date_normalized)
+    : escHtml(job.posted_text_raw || '–');
+
+  const meta = [job.department, job.location].filter(Boolean).map(escHtml).join(' · ');
 
   return `
-    <tr class="job-row${dimmed ? ' job-row-reposted' : ''}" data-id="${job.id}">
-      <td>
-        <div class="score-bar">
-          <div class="score-track"><div class="score-fill ${scoreClass}" style="width:${score}%"></div></div>
-          <span class="score-num">${score}</span>
-        </div>
-      </td>
-      <td><span class="truncate" title="${escHtml(job.title || '')}">${escHtml(job.title || '–')}</span></td>
-      <td><span class="truncate" title="${escHtml(job.location || '')}">${escHtml(job.location || '–')}</span></td>
-      <td class="text-muted nowrap">${postedStr}${badgeHtml}</td>
-      <td>${applicantDisplay}</td>
-      <td>${deltaHtml}</td>
-      <td><span class="badge badge-${job.status}">${job.status}</span></td>
-      <td><button class="hide-job-btn" title="Permanently hide this job" onclick="hideJob(event, ${job.id})">✕</button></td>
-    </tr>
+    <div class="job-item${dimmed ? ' job-item-dimmed' : ''}" data-id="${job.id}">
+      <div class="job-item-score ${scoreClass}">${score}</div>
+      <div class="job-item-body">
+        <div class="job-item-title">${escHtml(job.title || '–')}${nBadge}</div>
+        ${meta ? `<div class="job-item-meta">${meta}</div>` : ''}
+      </div>
+      <div class="job-item-right">
+        <span class="badge badge-${job.status}" style="font-size:11px">${job.status}</span>
+        ${appStr ? `<span class="job-item-appcount">${appStr}${deltaHtml ? ' ' + deltaHtml : ''}</span>` : ''}
+        <span class="job-item-date">${postedStr}</span>
+        <button class="hide-job-btn" title="Hide job" onclick="hideJob(event, ${job.id})">✕</button>
+      </div>
+    </div>
   `;
 }
 
